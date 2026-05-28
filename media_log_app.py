@@ -15,15 +15,21 @@ def get_worksheet():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=scopes
-    )
+
+    # Prefer secrets (Streamlit Cloud), fall back to local JSON for dev
+    if "gcp_service_account" in st.secrets:
+        creds = Credentials.from_service_account_info(
+            dict(st.secrets["gcp_service_account"]), scopes=scopes
+        )
+    else:
+        creds = Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=scopes
+        )
+
     client = gspread.authorize(creds)
-
     sh = client.open(SPREADSHEET_TITLE)
-    ws = sh.sheet1  # first tab in the file
+    ws = sh.sheet1
     return ws
-
 
 def empty_df():
     return pd.DataFrame(
