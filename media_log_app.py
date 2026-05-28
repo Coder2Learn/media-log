@@ -204,7 +204,7 @@ def main():
             c4.metric("Avg rating", f"{avg_rating:.1f}" if pd.notna(avg_rating) else "–")
 
             # --- Filters + search ---
-            with st.expander("Filters", expanded=True):
+            with st.expander("Filters", expanded=False):
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     platform_filter = st.multiselect(
