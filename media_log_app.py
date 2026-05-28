@@ -89,7 +89,11 @@ def main():
     st.title("🎬 Media Log")
 
     ws = get_worksheet()
-    page = st.sidebar.radio("Go to", ["Add Entry", "Browse"])
+    page = st.sidebar.radio(
+    "Go to",
+    ["Add Entry", "Browse"],
+    index=1,   # 0 = Add Entry, 1 = Browse
+    )
 
     if page == "Add Entry":
         st.subheader("Add a new movie / series")
@@ -99,7 +103,7 @@ def main():
             with col1:
                 added_by = st.text_input("Your name *")
                 title = st.text_input("Title *")
-                media_type = st.selectbox("Type *", ["movie", "series"])
+                media_type = st.selectbox("Type *", ["Movie", "WebSeries"])
                 genre = st.selectbox(
                     "Genre",
                     [
@@ -124,16 +128,16 @@ def main():
             with col2:
                 platform = st.selectbox(
                     "Platform",
-                    ["", "Netflix", "Prime Video", "Disney+ Hotstar", "JioCinema", "YouTube", "Other"],
+                    ["", "Netflix", "Prime Video", "Disney+ Hotstar", "SonyLiv", "YouTube", "Zee5", "Other"],
                     index=0,
                 )
                 status = st.selectbox(
                     "Status",
-                    ["watched", "watching", "plan"],
+                    ["Watched", "Watching Currently", "Plan to Watch"],
                     index=0,
                 )
                 rating = st.slider("Rating", 1, 10, 8)
-                recommend = st.selectbox("Would you recommend it?", ["yes", "no"])
+                recommend = st.selectbox("Would you recommend it?", ["Yes", "NO"])
 
             watched_year = st.number_input(
                 "Watched year (optional)",
