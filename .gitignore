@@ -1,0 +1,4 @@
+media-log-service-account.json
+*.pyc
+__pycache__/
+.streamlit/
