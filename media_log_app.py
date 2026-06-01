@@ -289,6 +289,8 @@ def main():
                 st.rerun()
 
         df = read_sheet_as_df(ws)
+        st.write("DEBUG platform values:", sorted(df["platform"].dropna().unique().tolist()))
+        st.write("DEBUG PLATFORM_LOGOS keys:", sorted(PLATFORM_LOGOS.keys()))
 
         if df.empty:
             st.info("No entries yet. Go to 'Add Entry' and create the first one.")
