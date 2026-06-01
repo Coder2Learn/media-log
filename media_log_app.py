@@ -4,6 +4,29 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
+PLATFORM_LOGOS = {
+    "Netflix":          "https://cdn.simpleicons.org/netflix/E50914",
+    "Prime Video":      "https://cdn.simpleicons.org/primevideo/00A8E1",
+    "Disney+ Hotstar":  "https://cdn.simpleicons.org/disneyplus/113CCF",
+    "JioCinema":        "https://cdn.simpleicons.org/jio/0078FF",
+    "YouTube":          "https://cdn.simpleicons.org/youtube/FF0000",
+    "Other":            "",
+    "":                 "",
+}
+
+
+def platform_badge(platform: str) -> str:
+    """Return HTML for platform logo + name."""
+    logo_url = PLATFORM_LOGOS.get(platform, "")
+    if logo_url:
+        return (
+            f'<img src="{logo_url}" '
+            f'style="vertical-align:middle; margin-right:4px;" '
+            f'width="18" height="18">'
+            f'{platform}'
+        )
+    return platform or ""
+
 # -------- CONFIG --------
 SPREADSHEET_TITLE = "MediaLog"   # Google Sheets file name
 SERVICE_ACCOUNT_FILE = "media-log-service-account.json"  # your JSON key filename
@@ -251,7 +274,23 @@ def main():
             if "timestamp" in filtered.columns:
                 filtered = filtered.sort_values("timestamp", ascending=False)
 
-            st.dataframe(filtered, use_container_width=True)
+            # Prepare a display copy so we don't mess with the raw data
+            df_display = filtered.copy()
+
+            # Apply platform logos
+            if "platform" in df_display.columns:
+                df_display["platform"] = df_display["platform"].apply(platform_badge)
+
+            # Optionally hide technical columns from the table
+            for col_to_drop in ["timestamp"]:
+                if col_to_drop in df_display.columns:
+                    df_display = df_display.drop(columns=[col_to_drop])
+
+            # Render as HTML so the <img> tags are honored
+            st.markdown(
+                df_display.to_html(escape=False, index=False),
+                unsafe_allow_html=True,
+            )
 
 
 if __name__ == "__main__":
