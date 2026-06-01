@@ -3,7 +3,16 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-
+# TEMPORARY — remove after copying output
+import base64, os
+if os.path.exists("assets/jiohotstar.png"):
+    for name, path in [("JioHotstar","assets/jiohotstar.png"),
+                       ("Sony LIV","assets/sonyliv.png"),
+                       ("ZEE5","assets/zee5.png")]:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        st.code(f'"{name}": "data:image/png;base64,{b64}"')
+    st.stop()
 # -------- CONFIG --------
 SPREADSHEET_TITLE = "MediaLog"   # Google Sheets file name
 SERVICE_ACCOUNT_FILE = "media-log-service-account.json"  # local JSON key (for dev)
