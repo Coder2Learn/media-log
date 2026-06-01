@@ -10,13 +10,14 @@ SERVICE_ACCOUNT_FILE = "media-log-service-account.json"  # local JSON key (for d
 
 
 # -------- PLATFORM ICONS (Simple Icons via jsDelivr) --------
+GITHUB_RAW = "https://github.com/Coder2Learn/media-log/tree/de1ba4a9320278ae26cad8c0dc4061ce15b53338/assets"
 PLATFORM_LOGOS = {
     "Netflix":          "https://cdn.simpleicons.org/netflix/E50914",
     "Prime Video":      "https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/primevideo.svg",
     "YouTube":          "https://cdn.simpleicons.org/youtube/FF0000",
-    "JioHotstar": "https://pplx-res.cloudinary.com/image/upload/pplx_search_images/51915f292eef3cb15f5cf65ef09d90e049a985c0.jpg",  # round blue JioHotstar logo[image:202]
-    "Sony LIV":   "https://pplx-res.cloudinary.com/image/upload/pplx_search_images/ce62f881495631313efb9b6a1fcebc425fe20b2e.jpg",  # refreshed SonyLIV logo[image:203]
-    "ZEE5":       "https://pplx-res.cloudinary.com/image/upload/pplx_search_images/8bd8706627ab08c1c85b92ad8b588d86a8a62fb2.jpg",  # modern multicolor ZEE5 logo[image:204]
+    "JioHotstar":  f"{GITHUB_RAW}/jiohotstar.png",
+    "Sony LIV":   f"{GITHUB_RAW}/sonyliv.png",
+    "ZEE5":       f"{GITHUB_RAW}/zee5.png",
     "Other":            "",
     "":                 "",
 }
