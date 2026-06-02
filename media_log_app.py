@@ -320,7 +320,7 @@ def page_add_entry(entries_ws, current_name: str):
                 key="tmdb_title_input",
             )
         with af2:
-            tmdb_t = st.selectbox("Type", ["movie", "series"], key="tmdb_type_input")
+            tmdb_t = st.selectbox("Type", ["Movie", "WebSeries"], key="tmdb_type_input")
         with af3:
             st.write("")
             st.write("")
@@ -397,7 +397,7 @@ def page_add_entry(entries_ws, current_name: str):
 
         c3, c4, c5 = st.columns(3)
         with c3:
-            type_opts = ["movie", "series"]
+            type_opts = ["Movie", "WebSeries"]
             type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
             media_type = st.selectbox("Type", type_opts, index=type_idx)
         with c4:
@@ -517,8 +517,8 @@ def page_browse(entries_ws, votes_ws):
     # ── FIX #1: correct movie/series count ────────────────────────
     # After read_entries normalises to lowercase, compare lowercase
     total  = len(df)
-    movies = int((df["type"].str.lower() == "movie").sum())  if "type" in df.columns else 0
-    series = int((df["type"].str.lower() == "Webseries").sum()) if "type" in df.columns else 0
+    movies = int((df["type"].str.lower() == "Movie").sum())  if "type" in df.columns else 0
+    series = int((df["type"].str.lower() == "WebSeries").sum()) if "type" in df.columns else 0
     avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
     watched = df[df.get("status", pd.Series(dtype=str)).str.lower() == "watched"] \
         if "status" in df.columns else df
@@ -531,7 +531,7 @@ def page_browse(entries_ws, votes_ws):
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("Total",           total)
     m2.metric("Movies",          movies)
-    m3.metric("Series",          series)
+    m3.metric("WebSeries",       series)
     m4.metric("Avg Rating",      f"{avg_r:.1f}" if pd.notna(avg_r) else "–")
     m5.metric("Recommend %",     f"{rec_pct}%")
     m6.metric("Community Votes", total_cvotes)
