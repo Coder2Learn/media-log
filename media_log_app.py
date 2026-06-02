@@ -92,17 +92,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    aliases = {
-        "Disney+ Hotstar": "JioHotstar",
-        "Hotstar": "JioHotstar",
-        "Jio Hotstar": "JioHotstar",
-        "Jiohotstar": "JioHotstar",
-        "Sony Liv": "SonyLiv",
-        "Sonyliv": "SonyLiv",
-        "Zee 5": "Zee5",
-        "ZEE5": "Zee5",
-    }
-    lookup = aliases.get(p, p)
+    lookup = "JioHotstar" if p == "Disney+ Hotstar" else p
     logo = PLATFORM_LOGOS.get(lookup, "")
     if logo:
         return (
@@ -129,11 +119,11 @@ def rating_stars(rating) -> str:
 
 def status_badge(status: str) -> str:
     cfg = {
-        "watched":  ("#16a34a", "✓ Watched"),
-        "watching": ("#f97316", "▶ Watching"),
-        "plan":     ("#3b82f6", "☰ Plan"),
+        "Watched":  ("#16a34a", "✓ Watched"),
+        "Watching": ("#f97316", "▶ Watching"),
+        "Plan":     ("#3b82f6", "☰ Plan"),
     }
-    color, label = cfg.get((status or "").lower(), ("#9ca3af", (status or "—").title()))
+    color, label = cfg.get((status or "").lower(), ("#9ca3af", status or "—"))
     return (
         f'<span style="background:{color};color:#fff;padding:2px 8px;'
         f'border-radius:999px;font-size:0.72rem;font-weight:500;">{label}</span>'
@@ -216,6 +206,12 @@ def read_entries(_ws) -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     if "entry_id" not in df.columns:
         df.insert(0, "entry_id", range(2, 2 + len(df)))
+    else:
+        df["entry_id"] = pd.to_numeric(df["entry_id"], errors="coerce")
+        if df["entry_id"].isna().any():
+            fallback_ids = pd.Series(range(2, 2 + len(df)), index=df.index)
+            df["entry_id"] = df["entry_id"].fillna(fallback_ids)
+        df["entry_id"] = df["entry_id"].astype(int)
     # Normalise type column to lowercase for consistent counting
     if "type" in df.columns:
         df["type"] = df["type"].str.strip().str.lower()
@@ -387,12 +383,6 @@ def page_add_entry(entries_ws, current_name: str):
     if pf_poster:
         st.session_state["pending_poster"] = pf_poster
 
-    # Persist prefill values into widget state so form submission reads them correctly
-    if pf_title:
-        st.session_state["title_input"] = pf_title
-    if current_name and not st.session_state.get("added_by_input"):
-        st.session_state["added_by_input"] = current_name
-
     # ── Main form ───────────────────────────────────────────────────
     with st.form("add_entry_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
@@ -400,17 +390,15 @@ def page_add_entry(entries_ws, current_name: str):
             # FIX #3: name pre-filled from sidebar; field is editable but defaults to sidebar value
             added_by = st.text_input(
                 "Your name *",
-                value=st.session_state.get("added_by_input", current_name),
+                value=current_name,
                 placeholder="e.g. Pankaj",
-                key="added_by_input",
             )
         with c2:
             title = st.text_input(
                 "Title *",
-                value=st.session_state.get("title_input", pf_title),
+                value=pf_title,
                 placeholder="e.g. Mirzapur Season 3",
                 help="Use original title if possible. Check if entry is already added.",
-                key="title_input",
             )
 
         c3, c4, c5 = st.columns(3)
@@ -424,8 +412,7 @@ def page_add_entry(entries_ws, current_name: str):
                 help="Pick the main platform where you watched it.",
             )
         with c5:
-            status_display = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0)
-            status = status_display.lower()
+            status = st.selectbox("Status", ["watched", "watching", "plan"], index=0)
 
         c6, c7 = st.columns(2)
         with c6:
@@ -663,21 +650,32 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # Use sidebar name only for voting; do not duplicate the voter text box in page body
-    if voter_name:
+    # ── Voter name ─────────────────────────────────────────────────
+    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
+    if not voter_name:
+        voter_input = st.text_input(
+            "Your name (for voting)",
+            placeholder="Enter your name to vote",
+            key="voter_name_input_browse",
+        )
+        if voter_input.strip():
+            st.session_state["voter_name"] = voter_input.strip()
+            st.session_state["user_name"]  = voter_input.strip()
+    else:
         st.caption(f"Voting as: **{voter_name}**")
 
-    # Export button on its own row
-    st.download_button(
-        "⬇ Export CSV",
-        filtered.to_csv(index=False).encode("utf-8"),
-        "watchlist.csv",
-        "text/csv",
-        use_container_width=True,
-    )
-
-    # View radio on its own row so it doesn't get compressed/distorted
-    view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
+    # ── FIX #4: Export + View on same row, properly aligned ────────
+    ec, vc = st.columns([2, 3])
+    with ec:
+        st.download_button(
+            "⬇ Export CSV",
+            filtered.to_csv(index=False).encode("utf-8"),
+            "watchlist.csv",
+            "text/csv",
+            use_container_width=True,
+        )
+    with vc:
+        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
 
     st.divider()
 
@@ -735,7 +733,7 @@ def page_reports(entries_ws):
                 .rename_axis("Platform").reset_index(name="Count").set_index("Platform")
             )
             st.bar_chart(pc)
-            st.dataframe(pc.reset_index(drop=False), use_container_width=True, hide_index=True)
+            st.dataframe(pc.reset_index(), use_container_width=True)
 
     with tab2:
         if "genre" in df.columns:
@@ -749,7 +747,7 @@ def page_reports(entries_ws):
                 .rename_axis("Genre").reset_index(name="Count").set_index("Genre")
             )
             st.bar_chart(gc)
-            st.dataframe(gc.reset_index(drop=False), use_container_width=True, hide_index=True)
+            st.dataframe(gc.reset_index(), use_container_width=True)
 
     with tab3:
         if "added_by" in df.columns:
@@ -760,7 +758,7 @@ def page_reports(entries_ws):
             )
             st.bar_chart(ac)
             avg_by = df.groupby("added_by")["rating"].mean().round(1).rename("Avg Rating")
-            st.dataframe(avg_by.reset_index(drop=False), use_container_width=True, hide_index=True)
+            st.dataframe(avg_by.reset_index(), use_container_width=True)
 
 
 # ─────────────────────────────────────────────
@@ -793,7 +791,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
     voter_name = st.session_state.get("voter_name", "").strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
-        entry_id       = int(row.get("entry_id", 0))
+        entry_id       = int(pd.to_numeric(row.get("entry_id", 0), errors="coerce") or 0)
         title_txt      = row.get("title",    "—")
         type_txt       = (row.get("type",    "") or "").title()
         genre_txt      = row.get("genre",    "") or "—"
@@ -922,7 +920,7 @@ def _render_table(filtered, vote_summary):
     df_display = filtered.copy()
 
     def _comm_votes(row):
-        eid    = int(row.get("entry_id", 0))
+        eid    = int(pd.to_numeric(row.get("entry_id", 0), errors="coerce") or 0)
         counts = vote_summary.get(eid, {"yes": 0, "no": 0})
         total  = counts["yes"] + counts["no"]
         if total == 0:
