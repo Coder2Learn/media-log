@@ -63,7 +63,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
         return {}
-    t = "tv" if media_type == "WebSeries" else "movie"
+    t = "tv" if media_type == "WebSeries" else "Movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
@@ -92,8 +92,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    normalized = {"Disney+ Hotstar": "JioHotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
-    lookup = normalized.get(p, p)
+    lookup = "JioHotstar" if p == "Disney+ Hotstar" else p
     logo = PLATFORM_LOGOS.get(lookup, "")
     if logo:
         return (
@@ -120,12 +119,11 @@ def rating_stars(rating) -> str:
 
 def status_badge(status: str) -> str:
     cfg = {
-        "watched":  ("#16a34a", "✓ Watched"),
-        "watching": ("#f97316", "▶ Watching"),
-        "plan":     ("#3b82f6", "☰ Plan"),
+        "Watched":  ("#16a34a", "✓ Watched"),
+        "Watching": ("#f97316", "▶ Watching"),
+        "Plan":     ("#3b82f6", "☰ Plan"),
     }
-    key = (status or "").strip().lower()
-    color, label = cfg.get(key, ("#9ca3af", (status or "—").title() if status else "—"))
+    color, label = cfg.get((status or "").lower(), ("#9ca3af", status or "—"))
     return (
         f'<span style="background:{color};color:#fff;padding:2px 8px;'
         f'border-radius:999px;font-size:0.72rem;font-weight:500;">{label}</span>'
@@ -363,7 +361,7 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
                     st.session_state["pf_year"]   = res.get("year", "")
                     st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
+                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "movie")
                     st.session_state["pf_poster"] = res.get("poster", "")
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
@@ -372,7 +370,7 @@ def page_add_entry(entries_ws, current_name: str):
     pf_title  = st.session_state.pop("pf_title",  "")
     pf_year   = st.session_state.pop("pf_year",   "")
     pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "Movie")
+    pf_type   = st.session_state.pop("pf_type",   "movie")
     pf_poster = st.session_state.pop("pf_poster", "")
 
     # If prefill triggered, store poster separately so form can pass it through
@@ -408,7 +406,7 @@ def page_add_entry(entries_ws, current_name: str):
                 help="Pick the main platform where you watched it.",
             )
         with c5:
-            status = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0)
+            status = st.selectbox("Status", ["watched", "watching", "plan"], index=0)
 
         c6, c7 = st.columns(2)
         with c6:
@@ -661,14 +659,17 @@ def page_browse(entries_ws, votes_ws):
         st.caption(f"Voting as: **{voter_name}**")
 
     # ── FIX #4: Export + View on same row, properly aligned ────────
-    st.download_button(
-        "⬇ Export CSV",
-        filtered.to_csv(index=False).encode("utf-8"),
-        "watchlist.csv",
-        "text/csv",
-        use_container_width=False,
-    )
-    view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
+    ec, vc = st.columns([2, 3])
+    with ec:
+        st.download_button(
+            "⬇ Export CSV",
+            filtered.to_csv(index=False).encode("utf-8"),
+            "watchlist.csv",
+            "text/csv",
+            use_container_width=True,
+        )
+    with vc:
+        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
 
     st.divider()
 
@@ -784,7 +785,11 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
     voter_name = st.session_state.get("voter_name", "").strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
-        entry_id       = int(row.get("entry_id", 0))
+        raw_entry_id = row.get("entry_id", 0)
+    try:
+        entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else 0
+    except (ValueError, TypeError):
+        entry_id = 0
         title_txt      = row.get("title",    "—")
         type_txt       = (row.get("type",    "") or "").title()
         genre_txt      = row.get("genre",    "") or "—"
