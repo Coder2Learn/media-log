@@ -204,7 +204,6 @@ def normalize_entries_df(df: pd.DataFrame) -> pd.DataFrame:
     for c in COLUMNS:
         if c not in df.columns:
             df[c] = ""
-
     raw_ids = pd.to_numeric(df.get("entry_id"), errors="coerce")
     next_id = 1
     normalized_ids = []
@@ -215,7 +214,6 @@ def normalize_entries_df(df: pd.DataFrame) -> pd.DataFrame:
             normalized_ids.append(int(value))
         next_id = max(next_id, normalized_ids[-1] + 1)
     df["entry_id"] = normalized_ids
-
     if "rating" in df.columns:
         df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
     if "timestamp" in df.columns:
@@ -226,7 +224,6 @@ def normalize_entries_df(df: pd.DataFrame) -> pd.DataFrame:
         df["status"] = df["status"].fillna("").astype(str).str.strip().str.lower()
     if "recommend" in df.columns:
         df["recommend"] = df["recommend"].fillna("").astype(str).str.strip().str.lower()
-
     return df[COLUMNS]
 
 
@@ -385,27 +382,18 @@ def page_add_entry(entries_ws, current_name: str):
                 # FIX #7: use_data button sets session state then reruns
                 #          so the form below picks up prefill values
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
-                    st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
-                    st.session_state["pf_year"]   = res.get("year", "")
-                    st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
-                    st.session_state["pf_poster"] = res.get("poster", "")
+                    st.session_state["add_entry_title"] = res.get("name", st.session_state.get("tmdb_query", ""))
+                    st.session_state["add_entry_type"] = st.session_state.get("tmdb_type_sel", "Movie")
+                    st.session_state["add_entry_genre"] = [g for g in res.get("genres", []) if g in GENRES_LIST]
+                    st.session_state["pending_year"] = res.get("year", "")
+                    st.session_state["pending_poster"] = res.get("poster", "")
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
 
-    # Read pre-fill values (set by "Use this data" or cleared after use)
-    pf_title  = st.session_state.pop("pf_title",  "")
-    pf_year   = st.session_state.pop("pf_year",   "")
-    pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "Movie")
-    pf_poster = st.session_state.pop("pf_poster", "")
-
-    # If prefill triggered, store poster separately so form can pass it through
-    if pf_poster:
-        st.session_state["pending_poster"] = pf_poster
+    # Read pre-fill values from the same widget keys the form uses
 
     # ── Main form ───────────────────────────────────────────────────
-    with st.form("add_entry_form", clear_on_submit=True):
+    with st.form("add_entry_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
             # FIX #3: name pre-filled from sidebar; field is editable but defaults to sidebar value
@@ -417,7 +405,7 @@ def page_add_entry(entries_ws, current_name: str):
         with c2:
             title = st.text_input(
                 "Title *",
-                value=pf_title,
+                key="add_entry_title",
                 placeholder="e.g. Mirzapur Season 3",
                 help="Use original title if possible. Check if entry is already added.",
             )
@@ -425,8 +413,8 @@ def page_add_entry(entries_ws, current_name: str):
         c3, c4, c5 = st.columns(3)
         with c3:
             type_opts = ["Movie", "WebSeries"]
-            type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
-            media_type = st.selectbox("Type", type_opts, index=type_idx)
+            type_idx  = type_opts.index(tmdb_type) if tmdb_type in type_opts else 0
+            media_type = st.selectbox("Type", type_opts, index=type_idx, key="add_entry_type")
         with c4:
             platform = st.selectbox(
                 "Platform", PLATFORMS, index=0,
@@ -437,11 +425,12 @@ def page_add_entry(entries_ws, current_name: str):
 
         c6, c7 = st.columns(2)
         with c6:
-            valid_pf_g = [g for g in pf_genres if g in GENRES_LIST]
+            valid_pf_g = [g for g in tmdb_genres if g in GENRES_LIST]
             genre_sel  = st.multiselect(
                 "Genre",
                 options=GENRES_LIST,
                 default=valid_pf_g,
+                key="add_entry_genre",
                 help="Select all genres that apply.",
             )
         with c7:
@@ -462,7 +451,7 @@ def page_add_entry(entries_ws, current_name: str):
                 ).lower()
             with c10:
                 try:
-                    yr_default = int(pf_year) if pf_year else datetime.now().year
+                    yr_default = int(tmdb_year) if tmdb_year else datetime.now().year
                 except ValueError:
                     yr_default = datetime.now().year
                 watched_year = st.number_input(
@@ -471,6 +460,7 @@ def page_add_entry(entries_ws, current_name: str):
                     max_value=datetime.now().year + 1,
                     value=yr_default,
                     step=1,
+                    key="add_entry_year",
                 )
 
         with st.expander("Add a short review (optional)"):
@@ -566,7 +556,6 @@ def page_browse(entries_ws, votes_ws):
     st.divider()
 
     # ── FIX #2: Tonight's picks — truly random, excludes current user ──
-    voter_name = st.session_state.get("voter_name", "").strip()
     if all(c in df.columns for c in ["recommend", "status", "rating"]):
         top_pool = df[
             (df["status"].str.lower() == "watched") &
@@ -676,7 +665,7 @@ def page_browse(entries_ws, votes_ws):
     if not voter_name:
         voter_input = st.text_input(
             "Your name (for voting)",
-            placeholder="Enter your name to vote",
+            placeholder="Enter your name in the sidebar to vote",
             key="voter_name_input_browse",
         )
         if voter_input.strip():
@@ -806,8 +795,6 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
     if filtered.empty:
         st.info("No entries match the current filters.")
         return
-
-    voter_name = st.session_state.get("voter_name", "").strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
         raw_entry_id = row.get("entry_id", 0)
