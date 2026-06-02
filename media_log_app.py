@@ -63,7 +63,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
         return {}
-    t = "tv" if media_type == "WebSeries" else "Movie"
+    t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
@@ -644,20 +644,6 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # ── Voter name ─────────────────────────────────────────────────
-    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
-    if not voter_name:
-        voter_input = st.text_input(
-            "Your name (for voting)",
-            placeholder="Enter your name to vote",
-            key="voter_name_input_browse",
-        )
-        if voter_input.strip():
-            st.session_state["voter_name"] = voter_input.strip()
-            st.session_state["user_name"]  = voter_input.strip()
-    else:
-        st.caption(f"Voting as: **{voter_name}**")
-
     # ── FIX #4: Export + View on same row, properly aligned ────────
     ec, vc = st.columns([2, 3])
     with ec:
@@ -668,8 +654,6 @@ def page_browse(entries_ws, votes_ws):
             "text/csv",
             use_container_width=True,
         )
-    with vc:
-        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
 
     st.divider()
 
@@ -701,6 +685,8 @@ def page_browse(entries_ws, votes_ws):
                 st.rerun()
 
     # ── Render ─────────────────────────────────────────────────────
+    with vc:
+        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
     if view_mode == "Cards":
         _render_cards(page_data, vote_summary, votes_df, votes_ws)
     else:
