@@ -63,7 +63,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
         return {}
-    t = "tv" if media_type == "WebSeries" else "Movie"
+    t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
@@ -92,7 +92,8 @@ def tmdb_search(title: str, media_type: str) -> dict:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    lookup = "JioHotstar" if p == "Disney+ Hotstar" else p
+    normalized = {"Disney+ Hotstar": "JioHotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
+    lookup = normalized.get(p, p)
     logo = PLATFORM_LOGOS.get(lookup, "")
     if logo:
         return (
@@ -110,6 +111,7 @@ def rating_stars(rating) -> str:
         r = float(rating)
     except (ValueError, TypeError):
         return "—"
+    r = max(0.0, min(10.0, r))
     stars = max(1, min(5, int(round(r / 2.0))))
     return (
         f'<span style="color:#f59e0b;">{"★"*stars}{"☆"*(5-stars)}</span>'
@@ -119,11 +121,12 @@ def rating_stars(rating) -> str:
 
 def status_badge(status: str) -> str:
     cfg = {
-        "Watched":  ("#16a34a", "✓ Watched"),
-        "Watching": ("#f97316", "▶ Watching"),
-        "Plan":     ("#3b82f6", "☰ Plan"),
+        "watched":  ("#16a34a", "✓ Watched"),
+        "watching": ("#f97316", "▶ Watching"),
+        "plan":     ("#3b82f6", "☰ Plan"),
     }
-    color, label = cfg.get((status or "").lower(), ("#9ca3af", status or "—"))
+    key = (status or "").strip().lower()
+    color, label = cfg.get(key, ("#9ca3af", (status or "—").title() if status else "—"))
     return (
         f'<span style="background:{color};color:#fff;padding:2px 8px;'
         f'border-radius:999px;font-size:0.72rem;font-weight:500;">{label}</span>'
@@ -361,7 +364,7 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
                     st.session_state["pf_year"]   = res.get("year", "")
                     st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "movie")
+                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                     st.session_state["pf_poster"] = res.get("poster", "")
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
@@ -370,7 +373,7 @@ def page_add_entry(entries_ws, current_name: str):
     pf_title  = st.session_state.pop("pf_title",  "")
     pf_year   = st.session_state.pop("pf_year",   "")
     pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "movie")
+    pf_type   = st.session_state.pop("pf_type",   "Movie")
     pf_poster = st.session_state.pop("pf_poster", "")
 
     # If prefill triggered, store poster separately so form can pass it through
@@ -406,7 +409,7 @@ def page_add_entry(entries_ws, current_name: str):
                 help="Pick the main platform where you watched it.",
             )
         with c5:
-            status = st.selectbox("Status", ["watched", "watching", "plan"], index=0)
+            status = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0)
 
         c6, c7 = st.columns(2)
         with c6:
@@ -517,8 +520,8 @@ def page_browse(entries_ws, votes_ws):
     # ── FIX #1: correct movie/series count ────────────────────────
     # After read_entries normalises to lowercase, compare lowercase
     total  = len(df)
-    movies = int((df["type"].str.lower() == "Movie").sum())  if "type" in df.columns else 0
-    series = int((df["type"].str.lower() == "WebSeries").sum()) if "type" in df.columns else 0
+    movies = int((df["type"].str.lower() == "movie").sum())  if "type" in df.columns else 0
+    series = int((df["type"].str.lower() == "webseries").sum()) if "type" in df.columns else 0
     avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
     watched = df[df.get("status", pd.Series(dtype=str)).str.lower() == "watched"] \
         if "status" in df.columns else df
@@ -659,17 +662,15 @@ def page_browse(entries_ws, votes_ws):
         st.caption(f"Voting as: **{voter_name}**")
 
     # ── FIX #4: Export + View on same row, properly aligned ────────
-    ec, vc = st.columns([2, 3])
-    with ec:
-        st.download_button(
-            "⬇ Export CSV",
-            filtered.to_csv(index=False).encode("utf-8"),
-            "watchlist.csv",
-            "text/csv",
-            use_container_width=True,
-        )
-    with vc:
-        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
+    st.download_button(
+        "⬇ Export CSV",
+        filtered.to_csv(index=False).encode("utf-8"),
+        "watchlist.csv",
+        "text/csv",
+        use_container_width=False,
+    )
+
+    view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
 
     st.divider()
 
@@ -786,10 +787,10 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
         raw_entry_id = row.get("entry_id", 0)
-    try:
-        entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else 0
-    except (ValueError, TypeError):
-        entry_id = 0
+        try:
+            entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
+        except (ValueError, TypeError):
+            entry_id = idx + 1
         title_txt      = row.get("title",    "—")
         type_txt       = (row.get("type",    "") or "").title()
         genre_txt      = row.get("genre",    "") or "—"
