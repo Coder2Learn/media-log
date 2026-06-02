@@ -647,20 +647,6 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # ── Voter name ─────────────────────────────────────────────────
-    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
-    if not voter_name:
-        voter_input = st.text_input(
-            "Your name (for voting)",
-            placeholder="Enter your name to vote",
-            key="voter_name_input_browse",
-        )
-        if voter_input.strip():
-            st.session_state["voter_name"] = voter_input.strip()
-            st.session_state["user_name"]  = voter_input.strip()
-    else:
-        st.caption(f"Voting as: **{voter_name}**")
-
     # ── FIX #4: Export + View on same row, properly aligned ────────
     st.download_button(
         "⬇ Export CSV",
@@ -798,46 +784,55 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
         added_by_txt = str(row.get("added_by", "") or "Unknown")
         comments_txt = str(row.get("comments", "") or "").strip()
         poster_url = str(row.get("poster_url", "") or "").strip()
-        platform_html = platform_badge(row.get("platform", ""))
-        rating_html = rating_stars(row.get("rating"))
-        status_html = status_badge(row.get("status", ""))
-        recommend_html = recommend_badge(row.get("recommend", ""))
+        platform_txt = str(row.get("platform", "") or "—")
+        rating_val = row.get("rating")
+        status_txt = str(row.get("status", "") or "").title()
+        recommend_txt = str(row.get("recommend", "") or "").title()
 
         counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-        comm_bar = community_bar(counts["yes"], counts["no"])
-        review_html = f'<div class="wlog-card-review">💬 {comments_txt}</div>' if comments_txt else ""
+        total_votes = counts["yes"] + counts["no"]
+        pct_yes = int(round(100 * counts["yes"] / total_votes)) if total_votes else 0
 
-        poster_block = ""
-        if poster_url:
-            poster_block = (
-                f'<img src="{poster_url}" width="54" height="80" '
-                f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
-                f'alt="poster" loading="lazy">'
-            )
+        with st.container(border=True):
+            head_l, head_r = st.columns([8, 2])
+            with head_l:
+                row_cols = st.columns([1, 8]) if poster_url else st.columns([8])
+                if poster_url:
+                    with row_cols[0]:
+                        st.image(poster_url, width=54)
+                    info_col = row_cols[1]
+                else:
+                    info_col = row_cols[0]
+                with info_col:
+                    meta = f"{type_txt} · {genre_txt}" if type_txt or genre_txt else ""
+                    st.markdown(f"**{title_txt}**" + (f" <span style='color:#94a3b8;font-size:0.85rem;'>{meta}</span>" if meta else ""), unsafe_allow_html=True)
+                    chips = []
+                    if pd.notna(rating_val):
+                        try:
+                            chips.append(f"⭐ {int(float(rating_val))}/10")
+                        except Exception:
+                            pass
+                    if recommend_txt in ["Yes", "No"]:
+                        chips.append(f"👍 {recommend_txt}")
+                    if status_txt:
+                        chips.append(status_txt)
+                    if chips:
+                        st.caption(" · ".join(chips))
+            with head_r:
+                if platform_txt and platform_txt != "—":
+                    st.markdown(f"<div style='text-align:right;'>{platform_txt}</div>", unsafe_allow_html=True)
 
-        card_inner = f"""
-<div style="display:flex;gap:12px;align-items:flex-start;">
-  {poster_block}
-  <div style="flex:1;min-width:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-      <div style="min-width:0;">
-        <span class="wlog-card-title">{title_txt}</span>
-        <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;white-space:nowrap;">{platform_html}</div>
-    </div>
-    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-      {rating_html} {recommend_html} {status_html}
-    </div>
-    {review_html}
-    <div style="margin-top:6px;">{comm_bar}</div>
-    <div class="wlog-card-footer">Added by {added_by_txt}</div>
-  </div>
-</div>"""
+            if comments_txt:
+                st.write(comments_txt)
 
-        st.markdown(f'<div class="wlog-card">{card_inner}</div>', unsafe_allow_html=True)
-        _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx)
-        st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
+            if total_votes:
+                st.caption(f"👍 {counts['yes']} · 👎 {counts['no']} · {pct_yes}% recommend")
+                st.progress(pct_yes / 100)
+            else:
+                st.caption("No community votes yet")
+
+            st.caption(f"Added by {added_by_txt}")
+            _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx)
 
 # ─────────────────────────────────────────────
 #  VOTE WIDGET
