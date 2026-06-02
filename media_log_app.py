@@ -361,30 +361,19 @@ def page_add_entry(entries_ws, current_name: str):
                 # FIX #7: use_data button sets session state then reruns
                 #          so the form below picks up prefill values
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
-                    st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
-                    st.session_state["pf_year"]   = res.get("year", "")
-                    st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
-                    st.session_state["pf_poster"] = res.get("poster", "")
+                    st.session_state["add_entry_title"] = res.get("name", st.session_state.get("tmdb_query", ""))
+                    st.session_state["add_entry_type"] = st.session_state.get("tmdb_type_sel", "Movie")
+                    st.session_state["add_entry_genre"] = [g for g in res.get("genres", []) if g in GENRES_LIST]
+                    st.session_state["pending_year"] = res.get("year", "")
+                    st.session_state["pending_poster"] = res.get("poster", "")
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
 
-    # Read pre-fill values and persist them in session state until a successful save
-    if "pf_title" in st.session_state:
-        st.session_state["form_title"] = st.session_state.pop("pf_title", "")
-    if "pf_year" in st.session_state:
-        st.session_state["form_year"] = st.session_state.pop("pf_year", "")
-    if "pf_genres" in st.session_state:
-        st.session_state["form_genres"] = st.session_state.pop("pf_genres", [])
-    if "pf_type" in st.session_state:
-        st.session_state["form_type"] = st.session_state.pop("pf_type", "Movie")
-    if "pf_poster" in st.session_state:
-        st.session_state["pending_poster"] = st.session_state.pop("pf_poster", "")
-
-    pf_title  = st.session_state.get("form_title", "")
-    pf_year   = st.session_state.get("form_year", "")
-    pf_genres = st.session_state.get("form_genres", [])
-    pf_type   = st.session_state.get("form_type", "Movie")
+    # Read pre-fill values from the same widget keys the form uses
+    pf_title  = st.session_state.get("add_entry_title", "")
+    pf_year   = st.session_state.get("pending_year", "")
+    pf_genres = st.session_state.get("add_entry_genre", [])
+    pf_type   = st.session_state.get("add_entry_type", "Movie")
 
     # ── Main form ───────────────────────────────────────────────────
     with st.form("add_entry_form", clear_on_submit=False):
@@ -399,7 +388,6 @@ def page_add_entry(entries_ws, current_name: str):
         with c2:
             title = st.text_input(
                 "Title *",
-                value=pf_title,
                 key="add_entry_title",
                 placeholder="e.g. Mirzapur Season 3",
                 help="Use original title if possible. Check if entry is already added.",
@@ -455,6 +443,7 @@ def page_add_entry(entries_ws, current_name: str):
                     max_value=datetime.now().year + 1,
                     value=yr_default,
                     step=1,
+                    key="add_entry_year",
                 )
 
         with st.expander("Add a short review (optional)"):
