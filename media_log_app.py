@@ -61,17 +61,15 @@ TMDB_GENRE_MAP = {
 # ─────────────────────────────────────────────
 def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
-    query = (title or "").strip()
-    if not key or not query:
+    if not key or not title.strip():
         return {}
     t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
-            params={"api_key": key, "query": query, "language": "en-US", "page": 1, "include_adult": False},
-            timeout=10,
+            params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
+            timeout=5,
         )
-        r.raise_for_status()
         results = r.json().get("results", [])
         if not results:
             return {}
@@ -83,7 +81,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
         poster = ""
         if top.get("poster_path"):
             poster = TMDB_IMG_BASE + top["poster_path"]
-        name = top.get("title") or top.get("name") or query
+        name = top.get("title") or top.get("name") or title
         return {"year": year, "genres": genres, "poster": poster, "name": name}
     except Exception:
         return {}
@@ -235,7 +233,7 @@ def build_vote_summary(votes_df: pd.DataFrame) -> dict:
         return summary
     for _, row in votes_df.iterrows():
         try:
-            eid  = coerce_entry_id(row.get("entry_id"))
+            eid  = int(row["entry_id"])
             vote = str(row.get("vote", "")).strip().lower()
         except (ValueError, TypeError):
             continue
@@ -258,45 +256,9 @@ def already_voted(votes_df: pd.DataFrame, entry_id: int, voter_name: str) -> boo
     return bool(mask.any())
 
 
-def coerce_entry_id(value):
-    try:
-        if value is None or (isinstance(value, float) and pd.isna(value)):
-            return None
-        text = str(value).strip()
-        if not text:
-            return None
-        return int(float(text))
-    except (ValueError, TypeError):
-        return None
-
-
-def ensure_entry_ids(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    if "entry_id" not in df.columns:
-        df.insert(0, "entry_id", range(1, len(df) + 1))
-    df["entry_id"] = [coerce_entry_id(v) for v in df["entry_id"]]
-    missing = df["entry_id"].isna()
-    if missing.any():
-        existing = [int(v) for v in df["entry_id"].dropna().tolist()]
-        next_id = (max(existing) + 1) if existing else 1
-        filled = []
-        for is_missing in missing.tolist():
-            if is_missing:
-                filled.append(next_id)
-                next_id += 1
-        it = iter(filled)
-        df.loc[missing, "entry_id"] = [next(it) for _ in range(int(missing.sum()))]
-    df["entry_id"] = df["entry_id"].astype(int)
-    return df
-
-
 def cast_vote(votes_ws, entry_id: int, voter_name: str, vote: str):
-    safe_entry_id = coerce_entry_id(entry_id)
-    safe_name = (voter_name or "").strip()
-    if safe_entry_id is None or not safe_name or vote not in {"yes", "no"}:
-        return
     votes_ws.append_row(
-        [safe_entry_id, safe_name, vote],
+        [entry_id, voter_name.strip(), vote],
         value_input_option="USER_ENTERED",
     )
 
@@ -407,19 +369,25 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
 
-    # Read pre-fill values (set by "Use this data" or cleared after use)
-    pf_title  = st.session_state.pop("pf_title",  "")
-    pf_year   = st.session_state.pop("pf_year",   "")
-    pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "Movie")
-    pf_poster = st.session_state.pop("pf_poster", "")
+    # Read pre-fill values and persist them in session state until a successful save
+    if "pf_title" in st.session_state:
+        st.session_state["form_title"] = st.session_state.pop("pf_title", "")
+    if "pf_year" in st.session_state:
+        st.session_state["form_year"] = st.session_state.pop("pf_year", "")
+    if "pf_genres" in st.session_state:
+        st.session_state["form_genres"] = st.session_state.pop("pf_genres", [])
+    if "pf_type" in st.session_state:
+        st.session_state["form_type"] = st.session_state.pop("pf_type", "Movie")
+    if "pf_poster" in st.session_state:
+        st.session_state["pending_poster"] = st.session_state.pop("pf_poster", "")
 
-    # If prefill triggered, store poster separately so form can pass it through
-    if pf_poster:
-        st.session_state["pending_poster"] = pf_poster
+    pf_title  = st.session_state.get("form_title", "")
+    pf_year   = st.session_state.get("form_year", "")
+    pf_genres = st.session_state.get("form_genres", [])
+    pf_type   = st.session_state.get("form_type", "Movie")
 
     # ── Main form ───────────────────────────────────────────────────
-    with st.form("add_entry_form", clear_on_submit=True):
+    with st.form("add_entry_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
             # FIX #3: name pre-filled from sidebar; field is editable but defaults to sidebar value
@@ -432,6 +400,7 @@ def page_add_entry(entries_ws, current_name: str):
             title = st.text_input(
                 "Title *",
                 value=pf_title,
+                key="add_entry_title",
                 placeholder="e.g. Mirzapur Season 3",
                 help="Use original title if possible. Check if entry is already added.",
             )
@@ -440,7 +409,7 @@ def page_add_entry(entries_ws, current_name: str):
         with c3:
             type_opts = ["Movie", "WebSeries"]
             type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
-            media_type = st.selectbox("Type", type_opts, index=type_idx)
+            media_type = st.selectbox("Type", type_opts, index=type_idx, key="add_entry_type")
         with c4:
             platform = st.selectbox(
                 "Platform", PLATFORMS, index=0,
@@ -456,6 +425,7 @@ def page_add_entry(entries_ws, current_name: str):
                 "Genre",
                 options=GENRES_LIST,
                 default=valid_pf_g,
+                key="add_entry_genre",
                 help="Select all genres that apply.",
             )
         with c7:
