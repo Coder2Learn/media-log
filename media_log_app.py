@@ -61,15 +61,17 @@ TMDB_GENRE_MAP = {
 # ─────────────────────────────────────────────
 def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
-    if not key or not title.strip():
+    query = (title or "").strip()
+    if not key or not query:
         return {}
     t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
-            params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
-            timeout=5,
+            params={"api_key": key, "query": query, "language": "en-US", "page": 1, "include_adult": False},
+            timeout=10,
         )
+        r.raise_for_status()
         results = r.json().get("results", [])
         if not results:
             return {}
@@ -81,7 +83,7 @@ def tmdb_search(title: str, media_type: str) -> dict:
         poster = ""
         if top.get("poster_path"):
             poster = TMDB_IMG_BASE + top["poster_path"]
-        name = top.get("title") or top.get("name") or title
+        name = top.get("title") or top.get("name") or query
         return {"year": year, "genres": genres, "poster": poster, "name": name}
     except Exception:
         return {}
@@ -233,7 +235,7 @@ def build_vote_summary(votes_df: pd.DataFrame) -> dict:
         return summary
     for _, row in votes_df.iterrows():
         try:
-            eid  = int(row["entry_id"])
+            eid  = coerce_entry_id(row.get("entry_id"))
             vote = str(row.get("vote", "")).strip().lower()
         except (ValueError, TypeError):
             continue
@@ -256,9 +258,45 @@ def already_voted(votes_df: pd.DataFrame, entry_id: int, voter_name: str) -> boo
     return bool(mask.any())
 
 
+def coerce_entry_id(value):
+    try:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return int(float(text))
+    except (ValueError, TypeError):
+        return None
+
+
+def ensure_entry_ids(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "entry_id" not in df.columns:
+        df.insert(0, "entry_id", range(1, len(df) + 1))
+    df["entry_id"] = [coerce_entry_id(v) for v in df["entry_id"]]
+    missing = df["entry_id"].isna()
+    if missing.any():
+        existing = [int(v) for v in df["entry_id"].dropna().tolist()]
+        next_id = (max(existing) + 1) if existing else 1
+        filled = []
+        for is_missing in missing.tolist():
+            if is_missing:
+                filled.append(next_id)
+                next_id += 1
+        it = iter(filled)
+        df.loc[missing, "entry_id"] = [next(it) for _ in range(int(missing.sum()))]
+    df["entry_id"] = df["entry_id"].astype(int)
+    return df
+
+
 def cast_vote(votes_ws, entry_id: int, voter_name: str, vote: str):
+    safe_entry_id = coerce_entry_id(entry_id)
+    safe_name = (voter_name or "").strip()
+    if safe_entry_id is None or not safe_name or vote not in {"yes", "no"}:
+        return
     votes_ws.append_row(
-        [entry_id, voter_name.strip(), vote],
+        [safe_entry_id, safe_name, vote],
         value_input_option="USER_ENTERED",
     )
 
