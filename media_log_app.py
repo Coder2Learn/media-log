@@ -518,7 +518,7 @@ def page_browse(entries_ws, votes_ws):
     # After read_entries normalises to lowercase, compare lowercase
     total  = len(df)
     movies = int((df["type"].str.lower() == "movie").sum())  if "type" in df.columns else 0
-    series = int((df["type"].str.lower() == "series").sum()) if "type" in df.columns else 0
+    series = int((df["type"].str.lower() == "Webseries").sum()) if "type" in df.columns else 0
     avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
     watched = df[df.get("status", pd.Series(dtype=str)).str.lower() == "watched"] \
         if "status" in df.columns else df
