@@ -542,7 +542,7 @@ def page_browse(entries_ws, votes_ws):
     st.divider()
 
     # ── FIX #2: Tonight's picks — truly random, excludes current user ──
-    voter_name = (st.session_state.get("user_name", "") or st.session_state.get("voter_name", "")).strip()
+    voter_name = st.session_state.get("voter_name", "").strip()
     if all(c in df.columns for c in ["recommend", "status", "rating"]):
         top_pool = df[
             (df["status"].str.lower() == "watched") &
@@ -791,41 +791,40 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
             entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
         except (ValueError, TypeError):
             entry_id = idx + 1
-        title_txt      = row.get("title",    "—")
-        type_txt       = (row.get("type",    "") or "").title()
-        genre_txt      = row.get("genre",    "") or "—"
-        added_by_txt   = row.get("added_by", "") or "Unknown"
-        comments_txt   = row.get("comments", "") or ""
-        poster_url     = row.get("poster_url", "") or ""
-        platform_html  = platform_badge(row.get("platform", ""))
-        rating_html    = rating_stars(row.get("rating"))
-        status_html    = status_badge(row.get("status",    ""))
+
+        title_txt = str(row.get("title", "—") or "—")
+        type_txt = str((row.get("type", "") or "")).title()
+        genre_txt = str(row.get("genre", "") or "—")
+        added_by_txt = str(row.get("added_by", "") or "Unknown")
+        comments_txt = str(row.get("comments", "") or "").strip()
+        poster_url = str(row.get("poster_url", "") or "").strip()
+        platform_html = platform_badge(row.get("platform", ""))
+        rating_html = rating_stars(row.get("rating"))
+        status_html = status_badge(row.get("status", ""))
         recommend_html = recommend_badge(row.get("recommend", ""))
 
-        counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+        counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
         comm_bar = community_bar(counts["yes"], counts["no"])
-        review_html = (
-            f'<div class="wlog-card-review">💬 {comments_txt}</div>'
-            if comments_txt else ""
-        )
+        review_html = f'<div class="wlog-card-review">💬 {comments_txt}</div>' if comments_txt else ""
 
-        # FIX #5: show poster thumbnail if available
+        poster_block = ""
         if poster_url:
-            img_html = (
+            poster_block = (
                 f'<img src="{poster_url}" width="54" height="80" '
                 f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
                 f'alt="poster" loading="lazy">'
             )
-            card_inner = f"""
+
+        card_inner = f"""
 <div style="display:flex;gap:12px;align-items:flex-start;">
-  {img_html}
+  {poster_block}
   <div style="flex:1;min-width:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div style="min-width:0;">
         <span class="wlog-card-title">{title_txt}</span>
         <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+      <div style="display:flex;align-items:center;gap:5px;white-space:nowrap;">{platform_html}</div>
     </div>
     <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
       {rating_html} {recommend_html} {status_html}
@@ -835,39 +834,18 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
     <div class="wlog-card-footer">Added by {added_by_txt}</div>
   </div>
 </div>"""
-        else:
-            card_inner = f"""
-<div style="display:flex;justify-content:space-between;align-items:flex-start;">
-  <div>
-    <span class="wlog-card-title">{title_txt}</span>
-    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-</div>
-<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-  {rating_html} {recommend_html} {status_html}
-</div>
-{review_html}
-<div style="margin-top:6px;">{comm_bar}</div>
-<div class="wlog-card-footer">Added by {added_by_txt}</div>"""
 
-        st.markdown(
-            f'<div class="wlog-card">{card_inner}</div>',
-            unsafe_allow_html=True,
-        )
-
-        _render_vote_widget(entry_id, title_txt, voter_name,
-                            votes_df, votes_ws, counts["yes"], counts["no"], idx)
+        st.markdown(f'<div class="wlog-card">{card_inner}</div>', unsafe_allow_html=True)
+        _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx)
         st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────
 #  VOTE WIDGET
 # ─────────────────────────────────────────────
 def _render_vote_widget(entry_id, title_txt, voter_name,
                         votes_df, votes_ws, yes_cnt, no_cnt, card_idx):
-    voted_key        = f"voted_{entry_id}"
-    voted_in_sheet   = voter_name and already_voted(votes_df, entry_id, voter_name)
+    voted_key = f"voted_{entry_id}"
+    voted_in_sheet = bool(voter_name) and already_voted(votes_df, entry_id, voter_name)
     voted_in_session = st.session_state.get(voted_key, None)
 
     lbl_col, yes_col, no_col, _ = st.columns([3, 1, 1, 5])
@@ -892,7 +870,7 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                     st.error("Could not save vote.")
                     st.exception(e)
         with no_col:
-            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Skip {title_txt}"):
+            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Do not recommend {title_txt}"):
                 try:
                     cast_vote(votes_ws, entry_id, voter_name, "no")
                     st.session_state[voted_key] = "👎 no"
@@ -901,58 +879,6 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                 except Exception as e:
                     st.error("Could not save vote.")
                     st.exception(e)
-
-
-# ─────────────────────────────────────────────
-#  TABLE RENDERER
-# ─────────────────────────────────────────────
-def _render_table(filtered, vote_summary):
-    if filtered.empty:
-        st.info("No entries match the current filters.")
-        return
-
-    df_display = filtered.copy()
-
-    def _comm_votes(row):
-        eid    = int(row.get("entry_id", 0))
-        counts = vote_summary.get(eid, {"yes": 0, "no": 0})
-        total  = counts["yes"] + counts["no"]
-        if total == 0:
-            return "—"
-        pct = int(round(100 * counts["yes"] / total))
-        return f'👍{counts["yes"]} / 👎{counts["no"]} ({pct}%)'
-
-    df_display["community_votes"] = df_display.apply(_comm_votes, axis=1)
-
-    if "platform"  in df_display.columns:
-        df_display["platform"]  = df_display["platform"].apply(platform_badge)
-    if "rating"    in df_display.columns:
-        df_display["rating"]    = df_display["rating"].apply(rating_stars)
-    if "status"    in df_display.columns:
-        df_display["status"]    = df_display["status"].apply(status_badge)
-    if "recommend" in df_display.columns:
-        df_display["recommend"] = df_display["recommend"].apply(recommend_badge)
-    if "type" in df_display.columns:
-        df_display["type"] = df_display["type"].str.title()
-
-    col_order = ["title", "type", "genre", "platform", "rating",
-                 "recommend", "community_votes", "status", "language",
-                 "added_by", "watched_year"]
-    existing   = [c for c in col_order if c in df_display.columns]
-    df_display = df_display[existing]
-    df_display.columns = [c.replace("_", " ").title() for c in df_display.columns]
-
-    st.markdown(
-        "<style>"
-        "table{width:100%;border-collapse:collapse;font-size:0.84rem;}"
-        "th{background:rgba(148,163,184,0.1);padding:7px 10px;text-align:left;}"
-        "td{padding:6px 10px;border-bottom:1px solid rgba(148,163,184,0.12);vertical-align:middle;}"
-        "tr:hover td{background:rgba(148,163,184,0.05);}"
-        "</style>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────
 #  MAIN
