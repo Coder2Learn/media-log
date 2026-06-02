@@ -39,7 +39,7 @@ LANGUAGES = ["", "Hindi", "English", "Tamil", "Telugu", "Malayalam",
              "Kannada", "Bengali", "Marathi", "Other"]
 
 COLUMNS = [
-    "timestamp", "added_by", "title", "type", "genre",
+    "entry_id", "timestamp", "added_by", "title", "type", "genre",
     "platform", "status", "rating", "recommend",
     "watched_year", "language", "comments", "poster_url",
 ]
@@ -197,26 +197,43 @@ def empty_votes_df():
     return pd.DataFrame(columns=VOTE_COLUMNS)
 
 
+def normalize_entries_df(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    df = df.copy()
+    for c in COLUMNS:
+        if c not in df.columns:
+            df[c] = ""
+    raw_ids = pd.to_numeric(df.get("entry_id"), errors="coerce")
+    next_id = 1
+    normalized_ids = []
+    for value in raw_ids.tolist():
+        if pd.isna(value):
+            normalized_ids.append(next_id)
+        else:
+            normalized_ids.append(int(value))
+        next_id = max(next_id, normalized_ids[-1] + 1)
+    df["entry_id"] = normalized_ids
+    if "rating" in df.columns:
+        df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    if "type" in df.columns:
+        df["type"] = df["type"].fillna("").astype(str).str.strip().str.lower()
+    if "status" in df.columns:
+        df["status"] = df["status"].fillna("").astype(str).str.strip().str.lower()
+    if "recommend" in df.columns:
+        df["recommend"] = df["recommend"].fillna("").astype(str).str.strip().str.lower()
+    return df[COLUMNS]
+
+
 @st.cache_data(ttl=30)
 def read_entries(_ws) -> pd.DataFrame:
     data = _ws.get_all_records()
     if not data:
         return empty_df()
     df = pd.DataFrame(data)
-    if "rating" in df.columns:
-        df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    if "entry_id" not in df.columns:
-        df.insert(0, "entry_id", range(2, 2 + len(df)))
-    # Normalise type column to lowercase for consistent counting
-    if "type" in df.columns:
-        df["type"] = df["type"].str.strip().str.lower()
-    if "status" in df.columns:
-        df["status"] = df["status"].str.strip().str.lower()
-    if "recommend" in df.columns:
-        df["recommend"] = df["recommend"].str.strip().str.lower()
-    return df
+    return normalize_entries_df(df)
 
 
 @st.cache_data(ttl=30)
@@ -264,8 +281,12 @@ def cast_vote(votes_ws, entry_id: int, voter_name: str, vote: str):
 
 
 def append_row(ws, row_dict: dict):
+    current_df = read_entries(ws)
+    next_entry_id = int(current_df["entry_id"].max()) + 1 if (not current_df.empty and "entry_id" in current_df.columns) else 1
+    payload = dict(row_dict)
+    payload["entry_id"] = next_entry_id
     ws.append_row(
-        [row_dict.get(c, "") for c in COLUMNS],
+        [payload.get(c, "") for c in COLUMNS],
         value_input_option="USER_ENTERED",
     )
 
@@ -361,27 +382,31 @@ def page_add_entry(entries_ws, current_name: str):
                 # FIX #7: use_data button sets session state then reruns
                 #          so the form below picks up prefill values
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
-                    st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
-                    st.session_state["pf_year"]   = res.get("year", "")
-                    st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
-                    st.session_state["pf_poster"] = res.get("poster", "")
+                    picked_title = res.get("name", st.session_state.get("tmdb_query", ""))
+                    picked_year = res.get("year", "")
+                    picked_genres = [g for g in res.get("genres", []) if g in GENRES_LIST]
+                    picked_type = st.session_state.get("tmdb_type_sel", "Movie")
+                    picked_poster = res.get("poster", "")
+                    st.session_state["add_entry_title"] = picked_title
+                    st.session_state["add_entry_type"] = picked_type
+                    st.session_state["add_entry_genre"] = picked_genres
+                    st.session_state["add_entry_year"] = int(picked_year) if str(picked_year).isdigit() else datetime.now().year
+                    st.session_state["pending_poster"] = picked_poster
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
 
-    # Read pre-fill values (set by "Use this data" or cleared after use)
-    pf_title  = st.session_state.pop("pf_title",  "")
-    pf_year   = st.session_state.pop("pf_year",   "")
-    pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "Movie")
-    pf_poster = st.session_state.pop("pf_poster", "")
-
-    # If prefill triggered, store poster separately so form can pass it through
-    if pf_poster:
-        st.session_state["pending_poster"] = pf_poster
+    # Stable widget-backed defaults for Add Entry
+    if "add_entry_title" not in st.session_state:
+        st.session_state["add_entry_title"] = ""
+    if "add_entry_type" not in st.session_state:
+        st.session_state["add_entry_type"] = "Movie"
+    if "add_entry_genre" not in st.session_state:
+        st.session_state["add_entry_genre"] = []
+    if "add_entry_year" not in st.session_state:
+        st.session_state["add_entry_year"] = datetime.now().year
 
     # ── Main form ───────────────────────────────────────────────────
-    with st.form("add_entry_form", clear_on_submit=True):
+    with st.form("add_entry_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
             # FIX #3: name pre-filled from sidebar; field is editable but defaults to sidebar value
@@ -393,7 +418,7 @@ def page_add_entry(entries_ws, current_name: str):
         with c2:
             title = st.text_input(
                 "Title *",
-                value=pf_title,
+                key="add_entry_title",
                 placeholder="e.g. Mirzapur Season 3",
                 help="Use original title if possible. Check if entry is already added.",
             )
@@ -401,8 +426,8 @@ def page_add_entry(entries_ws, current_name: str):
         c3, c4, c5 = st.columns(3)
         with c3:
             type_opts = ["Movie", "WebSeries"]
-            type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
-            media_type = st.selectbox("Type", type_opts, index=type_idx)
+            type_idx  = type_opts.index(st.session_state.get("add_entry_type", "Movie")) if st.session_state.get("add_entry_type", "Movie") in type_opts else 0
+            media_type = st.selectbox("Type", type_opts, index=type_idx, key="add_entry_type")
         with c4:
             platform = st.selectbox(
                 "Platform", PLATFORMS, index=0,
@@ -413,11 +438,12 @@ def page_add_entry(entries_ws, current_name: str):
 
         c6, c7 = st.columns(2)
         with c6:
-            valid_pf_g = [g for g in pf_genres if g in GENRES_LIST]
+            valid_pf_g = [g for g in st.session_state.get("add_entry_genre", []) if g in GENRES_LIST]
             genre_sel  = st.multiselect(
                 "Genre",
                 options=GENRES_LIST,
                 default=valid_pf_g,
+                key="add_entry_genre",
                 help="Select all genres that apply.",
             )
         with c7:
@@ -437,16 +463,14 @@ def page_add_entry(entries_ws, current_name: str):
                     "Recommend?", ["Yes", "No"], horizontal=True, index=0
                 ).lower()
             with c10:
-                try:
-                    yr_default = int(pf_year) if pf_year else datetime.now().year
-                except ValueError:
-                    yr_default = datetime.now().year
+                yr_default = int(st.session_state.get("add_entry_year", datetime.now().year))
                 watched_year = st.number_input(
                     "Year watched",
                     min_value=1990,
                     max_value=datetime.now().year + 1,
                     value=yr_default,
                     step=1,
+                    key="add_entry_year",
                 )
 
         with st.expander("Add a short review (optional)"):
@@ -502,6 +526,7 @@ def page_add_entry(entries_ws, current_name: str):
 #  PAGE: BROWSE
 # ─────────────────────────────────────────────
 def page_browse(entries_ws, votes_ws):
+    voter_name = (st.session_state.get("user_name", "") or st.session_state.get("voter_name", "")).strip()
     col_r, _ = st.columns([1, 9])
     with col_r:
         if st.button("🔄 Refresh"):
@@ -769,7 +794,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
         st.info("No entries match the current filters.")
         return
 
-    voter_name = (st.session_state.get("user_name", "") or st.session_state.get("voter_name", "")).strip()
+    voter_name = st.session_state.get("voter_name", "").strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
         raw_entry_id = row.get("entry_id", 0)
@@ -777,76 +802,94 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
             entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
         except (ValueError, TypeError):
             entry_id = idx + 1
+        title_txt      = row.get("title",    "—")
+        type_txt       = (row.get("type",    "") or "").title()
+        genre_txt      = row.get("genre",    "") or "—"
+        added_by_txt   = row.get("added_by", "") or "Unknown"
+        comments_txt   = row.get("comments", "") or ""
+        poster_url     = row.get("poster_url", "") or ""
+        platform_html  = platform_badge(row.get("platform", ""))
+        rating_html    = rating_stars(row.get("rating"))
+        status_html    = status_badge(row.get("status",    ""))
+        recommend_html = recommend_badge(row.get("recommend", ""))
 
-        title_txt = str(row.get("title", "—") or "—")
-        type_txt = str((row.get("type", "") or "")).title()
-        genre_txt = str(row.get("genre", "") or "—")
-        added_by_txt = str(row.get("added_by", "") or "Unknown")
-        comments_txt = str(row.get("comments", "") or "").strip()
-        poster_url = str(row.get("poster_url", "") or "").strip()
-        platform_txt = str(row.get("platform", "") or "—")
-        rating_val = row.get("rating")
-        status_txt = str(row.get("status", "") or "").title()
-        recommend_txt = str(row.get("recommend", "") or "").title()
+        counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+        comm_bar = community_bar(counts["yes"], counts["no"])
+        review_html = (
+            f'<div class="wlog-card-review">💬 {comments_txt}</div>'
+            if comments_txt else ""
+        )
 
-        counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-        total_votes = counts["yes"] + counts["no"]
-        pct_yes = int(round(100 * counts["yes"] / total_votes)) if total_votes else 0
+        # FIX #5: show poster thumbnail if available
+        if poster_url:
+            img_html = (
+                f'<img src="{poster_url}" width="54" height="80" '
+                f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
+                f'alt="poster" loading="lazy">'
+            )
+            card_inner = f"""
+<div style="display:flex;gap:12px;align-items:flex-start;">
+  {img_html}
+  <div style="flex:1;min-width:0;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <span class="wlog-card-title">{title_txt}</span>
+        <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+    </div>
+    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+      {rating_html} {recommend_html} {status_html}
+    </div>
+    {review_html}
+    <div style="margin-top:6px;">{comm_bar}</div>
+    <div class="wlog-card-footer">Added by {added_by_txt}</div>
+  </div>
+</div>"""
+        else:
+            card_inner = f"""
+<div style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <span class="wlog-card-title">{title_txt}</span>
+    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+</div>
+<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+  {rating_html} {recommend_html} {status_html}
+</div>
+{review_html}
+<div style="margin-top:6px;">{comm_bar}</div>
+<div class="wlog-card-footer">Added by {added_by_txt}</div>"""
 
-        with st.container(border=True):
-            head_l, head_r = st.columns([8, 2])
-            with head_l:
-                row_cols = st.columns([1, 8]) if poster_url else st.columns([8])
-                if poster_url:
-                    with row_cols[0]:
-                        st.image(poster_url, width=54)
-                    info_col = row_cols[1]
-                else:
-                    info_col = row_cols[0]
-                with info_col:
-                    meta = f"{type_txt} · {genre_txt}" if type_txt or genre_txt else ""
-                    st.markdown(f"**{title_txt}**" + (f" <span style='color:#94a3b8;font-size:0.85rem;'>{meta}</span>" if meta else ""), unsafe_allow_html=True)
-                    chips = []
-                    if pd.notna(rating_val):
-                        try:
-                            chips.append(f"⭐ {int(float(rating_val))}/10")
-                        except Exception:
-                            pass
-                    if recommend_txt in ["Yes", "No"]:
-                        chips.append(f"👍 {recommend_txt}")
-                    if status_txt:
-                        chips.append(status_txt)
-                    if chips:
-                        st.caption(" · ".join(chips))
-            with head_r:
-                if platform_txt and platform_txt != "—":
-                    st.markdown(f"<div style='text-align:right;'>{platform_txt}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="wlog-card">{card_inner}</div>',
+            unsafe_allow_html=True,
+        )
 
-            if comments_txt:
-                st.write(comments_txt)
+        _render_vote_widget(entry_id, title_txt, voter_name,
+                            votes_df, votes_ws, counts["yes"], counts["no"], idx)
+        st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
-            if total_votes:
-                st.caption(f"👍 {counts['yes']} · 👎 {counts['no']} · {pct_yes}% recommend")
-                st.progress(pct_yes / 100)
-            else:
-                st.caption("No community votes yet")
-
-            st.caption(f"Added by {added_by_txt}")
-            _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx)
 
 # ─────────────────────────────────────────────
 #  VOTE WIDGET
 # ─────────────────────────────────────────────
 def _render_vote_widget(entry_id, title_txt, voter_name,
                         votes_df, votes_ws, yes_cnt, no_cnt, card_idx):
-    voted_key = f"voted_{entry_id}"
-    voted_in_sheet = bool(voter_name) and already_voted(votes_df, entry_id, voter_name)
+    voted_key        = f"voted_{entry_id}"
+    voted_in_sheet   = voter_name and already_voted(votes_df, entry_id, voter_name)
     voted_in_session = st.session_state.get(voted_key, None)
 
     lbl_col, yes_col, no_col, _ = st.columns([3, 1, 1, 5])
 
     with lbl_col:
-        if voter_name and (voted_in_sheet or voted_in_session):
+        if not voter_name:
+            st.markdown(
+                '<span style="font-size:0.75rem;color:#9ca3af;">Enter name to vote</span>',
+                unsafe_allow_html=True,
+            )
+        elif voted_in_sheet or voted_in_session:
             prior = voted_in_session or "previously"
             st.markdown(
                 f'<span style="font-size:0.75rem;color:#9ca3af;">Your vote: <strong>{prior}</strong></span>',
@@ -865,7 +908,7 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                     st.error("Could not save vote.")
                     st.exception(e)
         with no_col:
-            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Do not recommend {title_txt}"):
+            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Skip {title_txt}"):
                 try:
                     cast_vote(votes_ws, entry_id, voter_name, "no")
                     st.session_state[voted_key] = "👎 no"
@@ -874,6 +917,58 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                 except Exception as e:
                     st.error("Could not save vote.")
                     st.exception(e)
+
+
+# ─────────────────────────────────────────────
+#  TABLE RENDERER
+# ─────────────────────────────────────────────
+def _render_table(filtered, vote_summary):
+    if filtered.empty:
+        st.info("No entries match the current filters.")
+        return
+
+    df_display = filtered.copy()
+
+    def _comm_votes(row):
+        eid    = int(row.get("entry_id", 0))
+        counts = vote_summary.get(eid, {"yes": 0, "no": 0})
+        total  = counts["yes"] + counts["no"]
+        if total == 0:
+            return "—"
+        pct = int(round(100 * counts["yes"] / total))
+        return f'👍{counts["yes"]} / 👎{counts["no"]} ({pct}%)'
+
+    df_display["community_votes"] = df_display.apply(_comm_votes, axis=1)
+
+    if "platform"  in df_display.columns:
+        df_display["platform"]  = df_display["platform"].apply(platform_badge)
+    if "rating"    in df_display.columns:
+        df_display["rating"]    = df_display["rating"].apply(rating_stars)
+    if "status"    in df_display.columns:
+        df_display["status"]    = df_display["status"].apply(status_badge)
+    if "recommend" in df_display.columns:
+        df_display["recommend"] = df_display["recommend"].apply(recommend_badge)
+    if "type" in df_display.columns:
+        df_display["type"] = df_display["type"].str.title()
+
+    col_order = ["title", "type", "genre", "platform", "rating",
+                 "recommend", "community_votes", "status", "language",
+                 "added_by", "watched_year"]
+    existing   = [c for c in col_order if c in df_display.columns]
+    df_display = df_display[existing]
+    df_display.columns = [c.replace("_", " ").title() for c in df_display.columns]
+
+    st.markdown(
+        "<style>"
+        "table{width:100%;border-collapse:collapse;font-size:0.84rem;}"
+        "th{background:rgba(148,163,184,0.1);padding:7px 10px;text-align:left;}"
+        "td{padding:6px 10px;border-bottom:1px solid rgba(148,163,184,0.12);vertical-align:middle;}"
+        "tr:hover td{background:rgba(148,163,184,0.05);}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+
 
 # ─────────────────────────────────────────────
 #  MAIN
