@@ -39,7 +39,7 @@ LANGUAGES = ["", "Hindi", "English", "Tamil", "Telugu", "Malayalam",
              "Kannada", "Bengali", "Marathi", "Other"]
 
 COLUMNS = [
-    "timestamp", "added_by", "title", "type", "genre",
+    "entry_id", "timestamp", "added_by", "title", "type", "genre",
     "platform", "status", "rating", "recommend",
     "watched_year", "language", "comments", "poster_url",
 ]
@@ -48,11 +48,16 @@ VOTE_COLUMNS = ["entry_id", "voter_name", "vote"]
 
 # TMDB genre id map
 TMDB_GENRE_MAP = {
+    # Movie genres
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
     80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
     14: "Fantasy", 27: "Horror", 10749: "Romance", 878: "Sci-Fi",
-    53: "Thriller", 10759: "Action", 10762: "Animation", 10765: "Sci-Fi",
-    10766: "Drama", 10767: "Other", 10768: "Other",
+    53: "Thriller", 36: "History", 10402: "Music", 9648: "Mystery",
+    10752: "War", 37: "Western",
+    # TV genres (correct TMDB labels)
+    10759: "Action & Adventure", 10762: "Kids", 10763: "News",
+    10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap",
+    10767: "Talk", 10768: "War & Politics",
 }
 
 
@@ -107,7 +112,7 @@ def rating_stars(rating) -> str:
     if rating is None or (isinstance(rating, float) and pd.isna(rating)):
         return "—"
     try:
-        r = float(rating)
+        r = max(0.0, min(10.0, float(rating)))  # BUG-06: clamp to 0-10
     except (ValueError, TypeError):
         return "—"
     stars = max(1, min(5, int(round(r / 2.0))))
@@ -204,8 +209,11 @@ def read_entries(_ws) -> pd.DataFrame:
         df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    if "entry_id" not in df.columns:
-        df.insert(0, "entry_id", range(2, 2 + len(df)))
+    if "entry_id" not in df.columns or df["entry_id"].isna().all():
+        # Fallback only if entry_id column is completely absent (legacy data)
+        df["entry_id"] = range(2, 2 + len(df))
+    else:
+        df["entry_id"] = pd.to_numeric(df["entry_id"], errors="coerce").fillna(0).astype(int)
     # Normalise type column to lowercase for consistent counting
     if "type" in df.columns:
         df["type"] = df["type"].str.strip().str.lower()
@@ -361,7 +369,7 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
                     st.session_state["pf_year"]   = res.get("year", "")
                     st.session_state["pf_genres"] = res.get("genres", [])
-                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "movie")
+                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                     st.session_state["pf_poster"] = res.get("poster", "")
                     st.session_state.pop("tmdb_result", None)
                     st.rerun()
@@ -370,7 +378,7 @@ def page_add_entry(entries_ws, current_name: str):
     pf_title  = st.session_state.pop("pf_title",  "")
     pf_year   = st.session_state.pop("pf_year",   "")
     pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "movie")
+    pf_type   = st.session_state.pop("pf_type",   "Movie")
     pf_poster = st.session_state.pop("pf_poster", "")
 
     # If prefill triggered, store poster separately so form can pass it through
@@ -471,7 +479,19 @@ def page_add_entry(entries_ws, current_name: str):
             # Retrieve poster that was stashed before form render
             poster_url = st.session_state.pop("pending_poster", "")
 
+            # Generate stable entry_id: use current sheet row count + 2
+            try:
+                existing_ids = [
+                    int(r.get("entry_id", 0))
+                    for r in entries_ws.get_all_records()
+                    if str(r.get("entry_id", "")).isdigit()
+                ]
+                next_id = max(existing_ids, default=1) + 1
+            except Exception:
+                next_id = int(datetime.now().timestamp())
+
             row = {
+                "entry_id":     next_id,
                 "timestamp":    datetime.now().isoformat(timespec="seconds"),
                 "added_by":     added_by.strip(),
                 "title":        title.strip(),
@@ -517,8 +537,8 @@ def page_browse(entries_ws, votes_ws):
     # ── FIX #1: correct movie/series count ────────────────────────
     # After read_entries normalises to lowercase, compare lowercase
     total  = len(df)
-    movies = int((df["type"].str.lower() == "Movie").sum())  if "type" in df.columns else 0
-    series = int((df["type"].str.lower() == "WebSeries").sum()) if "type" in df.columns else 0
+    movies = int((df["type"] == "movie").sum()) if "type" in df.columns else 0
+    series = int((df["type"] == "webseries").sum()) if "type" in df.columns else 0
     avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
     watched = df[df.get("status", pd.Series(dtype=str)).str.lower() == "watched"] \
         if "status" in df.columns else df
@@ -644,6 +664,20 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
+    # ── Voter name ─────────────────────────────────────────────────
+    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
+    if not voter_name:
+        voter_input = st.text_input(
+            "Your name (for voting)",
+            placeholder="Enter your name to vote",
+            key="voter_name_input_browse",
+        )
+        if voter_input.strip():
+            st.session_state["voter_name"] = voter_input.strip()
+            st.session_state["user_name"]  = voter_input.strip()
+    else:
+        st.caption(f"Voting as: **{voter_name}**")
+
     # ── FIX #4: Export + View on same row, properly aligned ────────
     ec, vc = st.columns([2, 3])
     with ec:
@@ -654,6 +688,8 @@ def page_browse(entries_ws, votes_ws):
             "text/csv",
             use_container_width=True,
         )
+    with vc:
+        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
 
     st.divider()
 
@@ -685,8 +721,6 @@ def page_browse(entries_ws, votes_ws):
                 st.rerun()
 
     # ── Render ─────────────────────────────────────────────────────
-    with vc:
-        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
     if view_mode == "Cards":
         _render_cards(page_data, vote_summary, votes_df, votes_ws)
     else:
