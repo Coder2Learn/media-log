@@ -143,7 +143,7 @@ def status_badge(status: str) -> str:
     color, label = cfg.get(key, ("#9ca3af", (status or "—").title() if status else "—"))
     return (
         f'<span style="background:{color};color:#fff;padding:2px 8px;'
-        f'border-radius:999px;font-size:0.72rem;font-weight:500;">{label}</span>'
+        f'border-radius:999px;font-size:0.72rem;font-weight:500;"> {label}</span>'
     )
 
 
