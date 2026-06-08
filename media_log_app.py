@@ -59,44 +59,32 @@ TMDB_GENRE_MAP = {
 # ─────────────────────────────────────────────
 #  TMDB HELPER
 # ─────────────────────────────────────────────
-def tmdb_search(title: str, media_type: str, max_results: int = 10) -> list:
+def tmdb_search(title: str, media_type: str) -> dict:
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
-        return []
+        return {}
     t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
             f"{TMDB_BASE}/search/{t}",
-            params={
-                "api_key": key,
-                "query": title.strip(),
-                "language": "en-US",
-                "page": 1,
-                "include_adult": False,
-            },
-            timeout=8,
+            params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
+            timeout=5,
         )
-        r.raise_for_status()
-        results = r.json().get("results", []) or []
-        matches = []
-        for item in results[:max_results]:
-            date_field = "first_air_date" if t == "tv" else "release_date"
-            year = (item.get(date_field, "") or "")[:4]
-            genre_ids = item.get("genre_ids", []) or []
-            genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
-            poster = TMDB_IMG_BASE + item["poster_path"] if item.get("poster_path") else ""
-            name = item.get("title") or item.get("name") or title
-            matches.append({
-                "id": item.get("id"),
-                "name": name,
-                "year": year,
-                "genres": genres,
-                "poster": poster,
-                "overview": item.get("overview", "") or "",
-            })
-        return matches
+        results = r.json().get("results", [])
+        if not results:
+            return {}
+        top = results[0]
+        date_field = "first_air_date" if t == "tv" else "release_date"
+        year = (top.get(date_field, "") or "")[:4]
+        genre_ids = top.get("genre_ids", [])
+        genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
+        poster = ""
+        if top.get("poster_path"):
+            poster = TMDB_IMG_BASE + top["poster_path"]
+        name = top.get("title") or top.get("name") or title
+        return {"year": year, "genres": genres, "poster": poster, "name": name}
     except Exception:
-        return []
+        return {}
 
 
 # ─────────────────────────────────────────────
@@ -318,84 +306,6 @@ def render_sidebar():
     return page, name
 
 
-def _tmdb_apply_selection(res: dict, selected_type: str):
-    st.session_state["pf_title"] = res.get("name", "")
-    st.session_state["pf_year"] = res.get("year", "")
-    st.session_state["pf_genres"] = res.get("genres", [])
-    st.session_state["pf_type"] = selected_type
-    st.session_state["pf_poster"] = res.get("poster", "")
-    st.session_state.pop("tmdb_results", None)
-    st.rerun()
-
-
-def _render_tmdb_results(results, selected_type, query):
-    st.markdown("**Select the correct match:**")
-    for idx, res in enumerate(results):
-        rc1, rc2 = st.columns([1, 5])
-        with rc1:
-            if res.get("poster"):
-                st.image(res["poster"], width=72)
-        with rc2:
-            year_txt = res.get("year", "") or "?"
-            genres_txt = ", ".join(res.get("genres", [])) or "—"
-            st.markdown(f"**{res.get('name', query)}** ({year_txt})  \nGenres: {genres_txt}")
-            if res.get("overview"):
-                overview = res["overview"][:220] + ("…" if len(res["overview"]) > 220 else "")
-                st.caption(overview)
-            if st.button("✅ Use this data", key=f"tmdb_use_btn_{idx}"):
-                _tmdb_apply_selection(res, selected_type)
-        if idx < len(results) - 1:
-            st.divider()
-
-
-def _platform_candidates(df: pd.DataFrame, platform_names: list, limit: int = 5) -> pd.DataFrame:
-    if df.empty or "platform" not in df.columns:
-        return pd.DataFrame()
-    platform_set = {p.lower() for p in platform_names}
-    temp = df.copy()
-    temp["platform_norm"] = temp["platform"].fillna("").astype(str).str.strip().str.lower()
-    temp = temp[temp["platform_norm"].isin(platform_set)]
-    if temp.empty:
-        return temp
-    if "poster_url" in temp.columns:
-        temp = temp[temp["poster_url"].fillna("").astype(str).str.strip() != ""]
-    if temp.empty:
-        return temp
-    if "recommend" in temp.columns:
-        temp["recommend_score"] = temp["recommend"].fillna("").astype(str).str.lower().eq("yes").astype(int)
-    else:
-        temp["recommend_score"] = 0
-    if "rating" in temp.columns:
-        temp["rating_num"] = pd.to_numeric(temp["rating"], errors="coerce").fillna(0)
-    else:
-        temp["rating_num"] = 0
-    if "timestamp" in temp.columns:
-        temp["timestamp_sort"] = pd.to_datetime(temp["timestamp"], errors="coerce")
-    else:
-        temp["timestamp_sort"] = pd.NaT
-    temp = temp.sort_values(["recommend_score", "rating_num", "timestamp_sort"], ascending=[False, False, False])
-    return temp.head(limit)
-
-
-def _render_shelf(df: pd.DataFrame, title: str, platform_names: list):
-    shelf = _platform_candidates(df, platform_names, limit=5)
-    if shelf.empty:
-        return
-    st.markdown(f"### {title}")
-    cols = st.columns(len(shelf))
-    for col, (_, row) in zip(cols, shelf.iterrows()):
-        with col:
-            poster = str(row.get("poster_url", "") or "").strip()
-            if poster:
-                st.image(poster, use_container_width=True)
-            st.markdown(f"**{str(row.get('title', '—') or '—')[:38]}**")
-            media_type = str(row.get("type", "") or "").title() or "Title"
-            year = str(row.get("watched_year", "") or row.get("timestamp", ""))
-            year = year[:4] if year else ""
-            st.caption(f"{media_type}{' • ' + year if year else ''}")
-    st.markdown("<div style='margin-bottom:0.6rem;'></div>", unsafe_allow_html=True)
-
-
 # ─────────────────────────────────────────────
 #  PAGE: ADD ENTRY
 # ─────────────────────────────────────────────
@@ -592,149 +502,197 @@ def page_add_entry(entries_ws, current_name: str):
 #  PAGE: BROWSE
 # ─────────────────────────────────────────────
 def page_browse(entries_ws, votes_ws):
-    top_l, top_r = st.columns([9, 1])
-    with top_r:
-        if st.button("🔄 Refresh", use_container_width=True):
+    col_r, _ = st.columns([1, 9])
+    with col_r:
+        if st.button("🔄 Refresh"):
             read_entries.clear()
             read_votes.clear()
             st.rerun()
 
-    df = read_entries(entries_ws)
-    votes_df = read_votes(votes_ws)
+    df           = read_entries(entries_ws)
+    votes_df     = read_votes(votes_ws)
     vote_summary = build_vote_summary(votes_df)
 
     if df.empty:
         st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
         return
 
-    total = len(df)
-    movies = int((df["type"].astype(str).str.lower() == "movie").sum()) if "type" in df.columns else 0
-    series = int((df["type"].astype(str).str.lower() == "webseries").sum()) if "type" in df.columns else 0
-    avg_r = pd.to_numeric(df.get("rating"), errors="coerce").mean() if "rating" in df.columns else float("nan")
-    watched = df[df.get("status", pd.Series(dtype=str)).astype(str).str.lower() == "watched"] if "status" in df.columns else df
-    rec_pct = int(100 * (watched.get("recommend", pd.Series(dtype=str)).astype(str).str.lower() == "yes").sum() / max(len(watched), 1)) if len(watched) else 0
+    # ── FIX #1: correct movie/series count ────────────────────────
+    # After read_entries normalises to lowercase, compare lowercase
+    total  = len(df)
+    movies = int((df["type"].str.lower() == "movie").sum())  if "type" in df.columns else 0
+    series = int((df["type"].str.lower() == "webseries").sum()) if "type" in df.columns else 0
+    avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
+    watched = df[df.get("status", pd.Series(dtype=str)).str.lower() == "watched"] \
+        if "status" in df.columns else df
+    rec_pct = (
+        int(100 * (watched["recommend"].str.lower() == "yes").sum() / max(len(watched), 1))
+        if "recommend" in df.columns else 0
+    )
     total_cvotes = sum(v["yes"] + v["no"] for v in vote_summary.values())
 
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Total", total)
-    m2.metric("Movies", movies)
-    m3.metric("WebSeries", series)
-    m4.metric("Avg Rating", f"{avg_r:.1f}" if pd.notna(avg_r) else "–")
-    m5.metric("Recommend %", f"{rec_pct}%")
+    m1.metric("Total",           total)
+    m2.metric("Movies",          movies)
+    m3.metric("WebSeries",       series)
+    m4.metric("Avg Rating",      f"{avg_r:.1f}" if pd.notna(avg_r) else "–")
+    m5.metric("Recommend %",     f"{rec_pct}%")
     m6.metric("Community Votes", total_cvotes)
+
     st.divider()
 
-    left_col, right_col = st.columns([1.2, 4.8], gap="large")
+    # ── FIX #2: Tonight's picks — truly random, excludes current user ──
+    voter_name = st.session_state.get("voter_name", "").strip()
+    if all(c in df.columns for c in ["recommend", "status", "rating"]):
+        top_pool = df[
+            (df["status"].str.lower() == "watched") &
+            (df["recommend"].str.lower() == "yes") &
+            (pd.to_numeric(df["rating"], errors="coerce") >= 8)
+        ]
+        # Exclude entries added by the current user
+        if voter_name and "added_by" in top_pool.columns:
+            top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
-    with left_col:
-        st.markdown("### Filters")
-        preset = st.radio(
-            "Quick filter",
-            ["All", "Recommended only", "High ratings (≥ 8)"],
-            key="browse_preset_left",
-        )
-        my_name = st.session_state.get("user_name", "").strip()
-        show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_left")
-        hide_watched = st.checkbox("Hide watched", value=False, key="hide_watched_left")
-        search_text = st.text_input("Search title", "", placeholder="Search title…", key="browse_search_left")
+        if not top_pool.empty:
+            st.markdown("### 🍿 Tonight's picks")
+            st.caption("Top-rated, community-recommended picks (not added by you).")
+            # Use random.sample for true randomness on every page load
+            sample_size = min(3, len(top_pool))
+            picks = top_pool.sample(n=sample_size, random_state=random.randint(0, 99999))
+            pcols = st.columns(sample_size)
+            for i, (_, pr) in enumerate(picks.iterrows()):
+                with pcols[i]:
+                    poster = pr.get("poster_url", "") or ""
+                    if poster:
+                        st.image(poster, width=70)
+                    st.markdown(
+                        f"**{pr.get('title','–')}**  \n"
+                        f"{platform_badge(pr.get('platform',''))} &nbsp; "
+                        f"{rating_stars(pr.get('rating'))}",
+                        unsafe_allow_html=True,
+                    )
+            st.divider()
 
-        st.markdown("**Content type**")
-        type_opts2 = sorted(df["type"].dropna().astype(str).unique().tolist()) if "type" in df.columns else []
-        type_f = st.multiselect("", type_opts2, key="f_type_left", label_visibility="collapsed")
+    # ── Quick preset + my entries ──────────────────────────────────
+    preset = st.radio(
+        "Quick filter",
+        ["All", "Recommended only", "High ratings (≥ 8)"],
+        horizontal=True,
+        key="browse_preset",
+    )
 
-        st.markdown("**Streaming platforms**")
-        plat_opts = sorted(df["platform"].dropna().replace("", "Unknown").astype(str).unique().tolist()) if "platform" in df.columns else []
-        plat_f = st.multiselect(" ", plat_opts, key="f_plat_left", label_visibility="collapsed")
+    my_name   = st.session_state.get("user_name", "").strip()
+    show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
 
-        st.markdown("**Status**")
-        stat_opts = sorted(df["status"].dropna().astype(str).unique().tolist()) if "status" in df.columns else []
-        stat_f = st.multiselect("  ", stat_opts, key="f_stat_left", label_visibility="collapsed")
+    # ── Search ─────────────────────────────────────────────────────
+    search_text = st.text_input("🔍 Search title", "", placeholder="Search title…")
 
-        st.markdown("**Recommend**")
-        rec_opts = sorted(df["recommend"].dropna().astype(str).unique().tolist()) if "recommend" in df.columns else []
-        rec_f = st.multiselect("   ", rec_opts, key="f_rec_left", label_visibility="collapsed")
+    # ── Compact filters ────────────────────────────────────────────
+    with st.expander("Filters", expanded=False):
+        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+        with fc1:
+            plat_opts = sorted(df["platform"].dropna().replace("", "Unknown").unique().tolist()) \
+                if "platform" in df.columns else []
+            plat_f = st.multiselect("Platform", plat_opts, key="f_plat")
+        with fc2:
+            type_opts2 = sorted(df["type"].dropna().unique().tolist()) if "type" in df.columns else []
+            type_f = st.multiselect("Type", type_opts2, key="f_type")
+        with fc3:
+            stat_opts = sorted(df["status"].dropna().unique().tolist()) if "status" in df.columns else []
+            stat_f = st.multiselect("Status", stat_opts, key="f_stat")
+        with fc4:
+            rec_opts = sorted(df["recommend"].dropna().unique().tolist()) if "recommend" in df.columns else []
+            rec_f = st.multiselect("Rec", rec_opts, key="f_rec")
+        with fc5:
+            all_genres = sorted(set(
+                g.strip()
+                for gs in df.get("genre", pd.Series(dtype=str)).dropna()
+                for g in str(gs).split(",") if g.strip()
+            ))
+            genre_f = st.multiselect("Genre", all_genres, key="f_genre")
 
-        st.markdown("**Genre**")
-        all_genres = sorted(set(
-            g.strip() for gs in df.get("genre", pd.Series(dtype=str)).dropna() for g in str(gs).split(",") if g.strip()
-        ))
-        genre_f = st.multiselect("    ", all_genres, key="f_genre_left", label_visibility="collapsed")
+    # ── Apply filters ──────────────────────────────────────────────
+    filtered = df.copy()
 
-    with right_col:
-        _render_shelf(df, "Don’t Miss These on Netflix", ["Netflix"])
-        _render_shelf(df, "Don’t Miss These on JioHotstar", ["JioHotstar", "Disney+ Hotstar"])
-        _render_shelf(df, "Don’t Miss These on Amazon Prime", ["Prime Video", "Amazon Prime", "Prime"])
-        st.divider()
-
-        filtered = df.copy()
-        if preset == "Recommended only":
-            filtered = filtered[filtered.get("recommend", pd.Series(dtype=str)).astype(str).str.lower() == "yes"]
-        elif preset == "High ratings (≥ 8)" and "rating" in filtered.columns:
+    if preset == "Recommended only":
+        filtered = filtered[filtered.get("recommend", pd.Series(dtype=str)).str.lower() == "yes"]
+    elif preset == "High ratings (≥ 8)":
+        if "rating" in filtered.columns:
             filtered = filtered[pd.to_numeric(filtered["rating"], errors="coerce") >= 8]
-        if show_mine and my_name and "added_by" in filtered.columns:
-            filtered = filtered[filtered["added_by"].astype(str).str.strip().str.lower() == my_name.lower()]
-        if hide_watched and "status" in filtered.columns:
-            filtered = filtered[filtered["status"].astype(str).str.lower() != "watched"]
-        if search_text and "title" in filtered.columns:
-            filtered = filtered[filtered["title"].astype(str).str.contains(search_text, case=False, na=False)]
-        if plat_f and "platform" in filtered.columns:
-            filtered = filtered[filtered["platform"].isin(plat_f)]
-        if type_f and "type" in filtered.columns:
-            filtered = filtered[filtered["type"].isin(type_f)]
-        if stat_f and "status" in filtered.columns:
-            filtered = filtered[filtered["status"].isin(stat_f)]
-        if rec_f and "recommend" in filtered.columns:
-            filtered = filtered[filtered["recommend"].isin(rec_f)]
-        if genre_f and "genre" in filtered.columns:
-            filtered = filtered[
-                filtered["genre"].apply(
-                    lambda g: any(sel.lower() in [x.strip().lower() for x in str(g).split(",")] for sel in genre_f)
+
+    if show_mine and my_name:
+        filtered = filtered[filtered["added_by"].str.strip().str.lower() == my_name.lower()]
+    if search_text:
+        filtered = filtered[filtered["title"].str.contains(search_text, case=False, na=False)]
+    if plat_f and "platform" in filtered.columns:
+        filtered = filtered[filtered["platform"].isin(plat_f)]
+    if type_f and "type" in filtered.columns:
+        filtered = filtered[filtered["type"].isin(type_f)]
+    if stat_f and "status" in filtered.columns:
+        filtered = filtered[filtered["status"].isin(stat_f)]
+    if rec_f and "recommend" in filtered.columns:
+        filtered = filtered[filtered["recommend"].isin(rec_f)]
+    if genre_f and "genre" in filtered.columns:
+        filtered = filtered[
+            filtered["genre"].apply(
+                lambda g: any(
+                    sel.lower() in [x.strip().lower() for x in str(g).split(",")]
+                    for sel in genre_f
                 )
-            ]
+            )
+        ]
 
-        if "timestamp" in filtered.columns:
-            filtered = filtered.sort_values("timestamp", ascending=False)
+    if "timestamp" in filtered.columns:
+        filtered = filtered.sort_values("timestamp", ascending=False)
 
-        st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
+    st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-        st.download_button(
-            "⬇ Export CSV",
-            filtered.to_csv(index=False).encode("utf-8"),
-            "watchlist.csv",
-            "text/csv",
-            use_container_width=False,
-        )
-        view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
-        st.divider()
+    # ── FIX #4: Export + View on same row, properly aligned ────────
+    st.download_button(
+        "⬇ Export CSV",
+        filtered.to_csv(index=False).encode("utf-8"),
+        "watchlist.csv",
+        "text/csv",
+        use_container_width=False,
+    )
 
-        total_filtered = len(filtered)
-        total_pages = max(1, (total_filtered + PAGE_SIZE - 1) // PAGE_SIZE)
-        if "browse_page" not in st.session_state:
-            st.session_state["browse_page"] = 1
-        st.session_state["browse_page"] = min(st.session_state["browse_page"], total_pages)
-        nav1, nav2, nav3 = st.columns([1, 2, 1])
-        with nav1:
-            if st.button("← Prev", disabled=st.session_state["browse_page"] <= 1):
-                st.session_state["browse_page"] -= 1
+    view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
+
+    st.divider()
+
+    # ── Pagination ─────────────────────────────────────────────────
+    total_filtered = len(filtered)
+    total_pages    = max(1, (total_filtered + PAGE_SIZE - 1) // PAGE_SIZE)
+    if "browse_page" not in st.session_state:
+        st.session_state.browse_page = 1
+    st.session_state.browse_page = min(st.session_state.browse_page, total_pages)
+
+    page_start = (st.session_state.browse_page - 1) * PAGE_SIZE
+    page_data  = filtered.iloc[page_start : page_start + PAGE_SIZE]
+
+    if total_pages > 1:
+        pg1, pg2, pg3 = st.columns([1, 3, 1])
+        with pg1:
+            if st.button("◀ Prev", disabled=st.session_state.browse_page <= 1):
+                st.session_state.browse_page -= 1
                 st.rerun()
-        with nav2:
+        with pg2:
             st.markdown(
-                f"<div style='text-align:center;padding-top:0.35rem;'>Page <b>{st.session_state['browse_page']}</b> of <b>{total_pages}</b></div>",
+                f"<div style='text-align:center;color:#9ca3af;font-size:0.85rem;padding-top:6px;'>"
+                f"Page {st.session_state.browse_page} of {total_pages}</div>",
                 unsafe_allow_html=True,
             )
-        with nav3:
-            if st.button("Next →", disabled=st.session_state["browse_page"] >= total_pages):
-                st.session_state["browse_page"] += 1
+        with pg3:
+            if st.button("Next ▶", disabled=st.session_state.browse_page >= total_pages):
+                st.session_state.browse_page += 1
                 st.rerun()
 
-        start_idx = (st.session_state["browse_page"] - 1) * PAGE_SIZE
-        end_idx = start_idx + PAGE_SIZE
-        page_data = filtered.iloc[start_idx:end_idx]
+    # ── Render ─────────────────────────────────────────────────────
+    if view_mode == "Cards":
+        _render_cards(page_data, vote_summary, votes_df, votes_ws)
+    else:
+        _render_table(page_data, vote_summary)
 
-        if view_mode == "Cards":
-            _render_cards(page_data, vote_summary, votes_df, votes_ws)
-        else:
-            _render_table(page_data, vote_summary)
 
 # ─────────────────────────────────────────────
 #  PAGE: REPORTS
@@ -806,12 +764,11 @@ def _inject_card_css():
 
 
 def _render_cards(filtered, vote_summary, votes_df, votes_ws):
-    _inject_card_css()
     if filtered.empty:
         st.info("No entries match the current filters.")
         return
 
-    voter_name = st.session_state.get("voter_name", "").strip()
+    voter_name = (st.session_state.get("user_name", "") or st.session_state.get("voter_name", "")).strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
         raw_entry_id = row.get("entry_id", 0)
@@ -819,99 +776,98 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
             entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
         except (ValueError, TypeError):
             entry_id = idx + 1
-        title_txt      = row.get("title",    "—")
-        type_txt       = (row.get("type",    "") or "").title()
-        genre_txt      = row.get("genre",    "") or "—"
-        added_by_txt   = row.get("added_by", "") or "Unknown"
-        comments_txt   = row.get("comments", "") or ""
-        poster_url     = row.get("poster_url", "") or ""
-        platform_html  = platform_badge(row.get("platform", ""))
-        rating_html    = rating_stars(row.get("rating"))
-        status_html    = status_badge(row.get("status",    ""))
-        recommend_html = recommend_badge(row.get("recommend", ""))
 
-        counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-        comm_bar = community_bar(counts["yes"], counts["no"])
-        review_html = (
-            f'<div class="wlog-card-review">💬 {comments_txt}</div>'
-            if comments_txt else ""
-        )
+        title_txt = str(row.get("title", "—") or "—")
+        type_txt = str((row.get("type", "") or "")).title()
+        genre_txt = str(row.get("genre", "") or "—")
+        added_by_txt = str(row.get("added_by", "") or "Unknown")
+        comments_txt = str(row.get("comments", "") or "").strip()
+        poster_url = str(row.get("poster_url", "") or "").strip()
+        platform_txt = str(row.get("platform", "") or "—")
+        rating_val = row.get("rating")
+        status_txt = str(row.get("status", "") or "").title()
+        recommend_txt = str(row.get("recommend", "") or "").title()
 
-        # FIX #5: show poster thumbnail if available
-        if poster_url:
-            img_html = (
-                f'<img src="{poster_url}" width="54" height="80" '
-                f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
-                f'alt="poster" loading="lazy">'
-            )
-            card_inner = f"""
-<div style="display:flex;gap:12px;align-items:flex-start;">
-  {img_html}
-  <div style="flex:1;min-width:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <span class="wlog-card-title">{title_txt}</span>
-        <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-    </div>
-    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-      {rating_html} {recommend_html} {status_html}
-    </div>
-    {review_html}
-    <div style="margin-top:6px;">{comm_bar}</div>
-    <div class="wlog-card-footer">Added by {added_by_txt}</div>
-  </div>
-</div>"""
-        else:
-            card_inner = f"""
-<div style="display:flex;justify-content:space-between;align-items:flex-start;">
-  <div>
-    <span class="wlog-card-title">{title_txt}</span>
-    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-</div>
-<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-  {rating_html} {recommend_html} {status_html}
-</div>
-{review_html}
-<div style="margin-top:6px;">{comm_bar}</div>
-<div class="wlog-card-footer">Added by {added_by_txt}</div>"""
+        counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+        total_votes = counts["yes"] + counts["no"]
+        pct_yes = int(round(100 * counts["yes"] / total_votes)) if total_votes else 0
 
-        st.markdown(
-            f'<div class="wlog-card">{card_inner}</div>',
-            unsafe_allow_html=True,
-        )
+        with st.container(border=True):
+            if poster_url:
+                pcol, icol = st.columns([1, 9])
+                with pcol:
+                    st.image(poster_url, width=54)
+                with icol:
+                    meta = f"{type_txt} · {genre_txt}" if (type_txt or genre_txt) else ""
+                    platform_inline = platform_badge(platform_txt) if platform_txt and platform_txt != "—" else ""
+                    title_line = f"**{title_txt}**"
+                    if meta:
+                        title_line += f" <span style='color:#94a3b8;font-size:0.85rem;'>{meta}</span>"
+                    if platform_inline:
+                        title_line += f" <span style='margin-left:12px;white-space:nowrap;'>{platform_inline}</span>"
+                    st.markdown(title_line, unsafe_allow_html=True)
+                    chips = []
+                    if pd.notna(rating_val):
+                        try:
+                            chips.append(f"⭐ {int(float(rating_val))}/10")
+                        except Exception:
+                            pass
+                    if recommend_txt in ["Yes", "No"]:
+                        chips.append(f"👍 {recommend_txt}")
+                    if status_txt:
+                        chips.append(status_txt)
+                    if chips:
+                        st.caption(" · ".join(chips))
+            else:
+                meta = f"{type_txt} · {genre_txt}" if (type_txt or genre_txt) else ""
+                platform_inline = platform_badge(platform_txt) if platform_txt and platform_txt != "—" else ""
+                title_line = f"**{title_txt}**"
+                if meta:
+                    title_line += f" <span style='color:#94a3b8;font-size:0.85rem;'>{meta}</span>"
+                if platform_inline:
+                    title_line += f" <span style='margin-left:12px;white-space:nowrap;'>{platform_inline}</span>"
+                st.markdown(title_line, unsafe_allow_html=True)
+                chips = []
+                if pd.notna(rating_val):
+                    try:
+                        chips.append(f"⭐ {int(float(rating_val))}/10")
+                    except Exception:
+                        pass
+                if recommend_txt in ["Yes", "No"]:
+                    chips.append(f"👍 {recommend_txt}")
+                if status_txt:
+                    chips.append(status_txt)
+                if chips:
+                    st.caption(" · ".join(chips))
 
-        _render_vote_widget(entry_id, title_txt, voter_name,
-                            votes_df, votes_ws, counts["yes"], counts["no"], idx)
-        st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
+            if comments_txt:
+                st.write(comments_txt)
 
+            if total_votes:
+                st.caption(f"👍 {counts['yes']} · 👎 {counts['no']} · {pct_yes}% recommend")
+                st.progress(pct_yes / 100)
+            else:
+                st.caption("No community votes yet")
+
+            st.caption(f"Added by {added_by_txt}")
+            _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx)
+            st.markdown('')
 
 # ─────────────────────────────────────────────
 #  VOTE WIDGET
 # ─────────────────────────────────────────────
 def _render_vote_widget(entry_id, title_txt, voter_name,
                         votes_df, votes_ws, yes_cnt, no_cnt, card_idx):
-    voted_key        = f"voted_{entry_id}"
-    voted_in_sheet   = voter_name and already_voted(votes_df, entry_id, voter_name)
+    voted_key = f"voted_{entry_id}"
+    voted_in_sheet = bool(voter_name) and already_voted(votes_df, entry_id, voter_name)
     voted_in_session = st.session_state.get(voted_key, None)
 
     lbl_col, yes_col, no_col, _ = st.columns([3, 1, 1, 5])
 
     with lbl_col:
-        if not voter_name:
-            st.markdown(
-                '<span style="font-size:0.75rem;color:#9ca3af;">Enter name to vote</span>',
-                unsafe_allow_html=True,
-            )
-        elif voted_in_sheet or voted_in_session:
+        if voter_name and (voted_in_sheet or voted_in_session):
             prior = voted_in_session or "previously"
-            st.markdown(
-                f'<span style="font-size:0.75rem;color:#9ca3af;">Your vote: <strong>{prior}</strong></span>',
-                unsafe_allow_html=True,
-            )
+            st.caption(f"Your vote: {prior}")
 
     if voter_name and not voted_in_sheet and not voted_in_session:
         with yes_col:
@@ -925,7 +881,7 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                     st.error("Could not save vote.")
                     st.exception(e)
         with no_col:
-            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Skip {title_txt}"):
+            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Do not recommend {title_txt}"):
                 try:
                     cast_vote(votes_ws, entry_id, voter_name, "no")
                     st.session_state[voted_key] = "👎 no"
@@ -935,10 +891,6 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                     st.error("Could not save vote.")
                     st.exception(e)
 
-
-# ─────────────────────────────────────────────
-#  TABLE RENDERER
-# ─────────────────────────────────────────────
 def _render_table(filtered, vote_summary):
     if filtered.empty:
         st.info("No entries match the current filters.")
