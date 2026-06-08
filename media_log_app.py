@@ -162,16 +162,19 @@ def community_bar(yes_count: int, no_count: int) -> str:
         return '<span style="font-size:0.75rem;color:#9ca3af;font-style:italic;">No community votes yet</span>'
     pct_yes = int(round(100 * yes_count / total))
     pct_no  = 100 - pct_yes
-    return f"""
-<div style="font-size:0.75rem;margin-top:4px;">
-  <span style="color:#16a34a;font-weight:600;">👍 {yes_count}</span>
-  &nbsp;·&nbsp;<span style="color:#9ca3af;font-weight:600;">👎 {no_count}</span>
-  &nbsp;·&nbsp;<span style="color:#9ca3af;">{pct_yes}% recommend</span>
-  <div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">
-    <div style="width:{pct_yes}%;background:#16a34a;"></div>
-    <div style="width:{pct_no}%;background:#4b5563;"></div>
-  </div>
-</div>"""
+    bar_inner = (
+        f'<div style="width:{pct_yes}%;background:#16a34a;"></div>'
+        f'<div style="width:{pct_no}%;background:#4b5563;"></div>'
+    )
+    bar = f'<div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">{bar_inner}</div>'
+    return (
+        f'<div style="font-size:0.75rem;margin-top:4px;">'
+        f'<span style="color:#16a34a;font-weight:600;">👍 {yes_count}</span>'
+        f'&nbsp;·&nbsp;<span style="color:#9ca3af;font-weight:600;">👎 {no_count}</span>'
+        f'&nbsp;·&nbsp;<span style="color:#9ca3af;">{pct_yes}% recommend</span>'
+        f'{bar}'
+        f'</div>'
+    )
 
 
 # ─────────────────────────────────────────────
@@ -854,40 +857,38 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
                 f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
                 f'alt="poster" loading="lazy">'
             )
-            card_inner = f"""
-<div style="display:flex;gap:12px;align-items:flex-start;">
-  {img_html}
-  <div style="flex:1;min-width:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <span class="wlog-card-title">{title_txt}</span>
-        <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-    </div>
-    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-      {rating_html} {recommend_html} {status_html}
-    </div>
-    {review_html}
-    <div style="margin-top:6px;">{comm_bar}</div>
-    <div class="wlog-card-footer">Added by {added_by_txt}</div>
-  </div>
-</div>"""
-        else:
-            card_inner = f"""
-<div style="display:flex;justify-content:space-between;align-items:flex-start;">
-  <div>
-    <span class="wlog-card-title">{title_txt}</span>
-    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-</div>
-<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-  {rating_html} {recommend_html} {status_html}
-</div>
-{review_html}
-<div style="margin-top:6px;">{comm_bar}</div>
-<div class="wlog-card-footer">Added by {added_by_txt}</div>"""
+            card_inner = (
+                f'<div style="display:flex;gap:12px;align-items:flex-start;">'
+                f'{img_html}'
+                f'<div style="flex:1;min-width:0;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+                f'<div><span class="wlog-card-title">{title_txt}</span>'
+                f'<span class="wlog-card-meta">{type_txt} · {genre_txt}</span></div>'
+                f'<div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>'
+                f'</div>'
+                f'<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">'
+                f'{rating_html} {recommend_html} {status_html}'
+                f'</div>'
+                f'{review_html}'
+                f'<div style="margin-top:6px;">{comm_bar}</div>'
+                f'<div class="wlog-card-footer">Added by {added_by_txt}</div>'
+                f'</div>'
+                f'</div>'
+            )
+            else:
+            card_inner = (
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+                f'<div><span class="wlog-card-title">{title_txt}</span>'
+                f'<span class="wlog-card-meta">{type_txt} · {genre_txt}</span></div>'
+                f'<div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>'
+                f'</div>'
+                f'<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">'
+                f'{rating_html} {recommend_html} {status_html}'
+                f'</div>'
+                f'{review_html}'
+                f'<div style="margin-top:6px;">{comm_bar}</div>'
+                f'<div class="wlog-card-footer">Added by {added_by_txt}</div>'
+            )
 
         st.markdown(
             f'<div class="wlog-card">{card_inner}</div>',
