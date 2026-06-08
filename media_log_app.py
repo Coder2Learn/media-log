@@ -6,7 +6,6 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
 from datetime import datetime
 import random
-import html as _html
 
 # ─────────────────────────────────────────────
 #  CONFIG
@@ -61,7 +60,7 @@ TMDB_GENRE_MAP = {
 #  TMDB HELPER
 # ─────────────────────────────────────────────
 def tmdb_search(title: str, media_type: str) -> list:
-    """Returns a list of up to 5 result dicts, or []."""
+    """Returns a list of up to 5 result dicts, or [] on failure/no results."""
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
         return []
@@ -78,13 +77,11 @@ def tmdb_search(title: str, media_type: str) -> list:
         out = []
         for top in results[:5]:
             date_field = "first_air_date" if t == "tv" else "release_date"
-            year = (top.get(date_field, "") or "")[:4]
+            year  = (top.get(date_field, "") or "")[:4]
             genre_ids = top.get("genre_ids", [])
             genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
-            poster = ""
-            if top.get("poster_path"):
-                poster = TMDB_IMG_BASE + top["poster_path"]
-            name = top.get("title") or top.get("name") or title
+            poster = TMDB_IMG_BASE + top["poster_path"] if top.get("poster_path") else ""
+            name   = top.get("title") or top.get("name") or title
             out.append({"year": year, "genres": genres, "poster": poster, "name": name})
         return out
     except Exception:
@@ -96,26 +93,16 @@ def tmdb_search(title: str, media_type: str) -> list:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    if not p:
-        return "—"
-    normalized = {
-        "Disney+ Hotstar": "Jio Hotstar",
-        "Hotstar":         "Jio Hotstar",
-        "SonyLiv":         "Sony LIV",
-        "ZEE5":            "Zee5",
-        "Zee5":            "Zee5",
-    }
+    normalized = {"Disney+ Hotstar": "JioHotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
     lookup = normalized.get(p, p)
     logo = PLATFORM_LOGOS.get(lookup, "")
-    safe_p = _html.escape(p)
     if logo:
         return (
             f'<img src="{logo}" width="14" height="14" '
-            f'style="vertical-align:middle;margin-right:4px;border-radius:2px;" '
-            f'alt="{safe_p}">'
-            f'<span style="color:inherit;">{safe_p}</span>'
+            f'style="vertical-align:middle;margin-right:4px;border-radius:2px;">'
+            f'<span style="color:inherit;">{p}</span>'
         )
-    return f'<span style="color:inherit;">{safe_p}</span>'
+    return f'<span style="color:inherit;">{p}</span>' if p else "—"
 
 
 def rating_stars(rating) -> str:
@@ -143,7 +130,7 @@ def status_badge(status: str) -> str:
     color, label = cfg.get(key, ("#9ca3af", (status or "—").title() if status else "—"))
     return (
         f'<span style="background:{color};color:#fff;padding:2px 8px;'
-        f'border-radius:999px;font-size:0.72rem;font-weight:500;"> {label}</span>'
+        f'border-radius:999px;font-size:0.72rem;font-weight:500;">{label}</span>'
     )
 
 
@@ -162,19 +149,16 @@ def community_bar(yes_count: int, no_count: int) -> str:
         return '<span style="font-size:0.75rem;color:#9ca3af;font-style:italic;">No community votes yet</span>'
     pct_yes = int(round(100 * yes_count / total))
     pct_no  = 100 - pct_yes
-    bar_inner = (
-        f'<div style="width:{pct_yes}%;background:#16a34a;"></div>'
-        f'<div style="width:{pct_no}%;background:#4b5563;"></div>'
-    )
-    bar = f'<div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">{bar_inner}</div>'
-    return (
-        f'<div style="font-size:0.75rem;margin-top:4px;">'
-        f'<span style="color:#16a34a;font-weight:600;">👍 {yes_count}</span>'
-        f'&nbsp;·&nbsp;<span style="color:#9ca3af;font-weight:600;">👎 {no_count}</span>'
-        f'&nbsp;·&nbsp;<span style="color:#9ca3af;">{pct_yes}% recommend</span>'
-        f'{bar}'
-        f'</div>'
-    )
+    return f"""
+<div style="font-size:0.75rem;margin-top:4px;">
+  <span style="color:#16a34a;font-weight:600;">👍 {yes_count}</span>
+  &nbsp;·&nbsp;<span style="color:#9ca3af;font-weight:600;">👎 {no_count}</span>
+  &nbsp;·&nbsp;<span style="color:#9ca3af;">{pct_yes}% recommend</span>
+  <div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">
+    <div style="width:{pct_yes}%;background:#16a34a;"></div>
+    <div style="width:{pct_no}%;background:#4b5563;"></div>
+  </div>
+</div>"""
 
 
 # ─────────────────────────────────────────────
@@ -291,30 +275,11 @@ def append_row(ws, row_dict: dict):
 #  SIDEBAR  (shared across all pages)
 # ─────────────────────────────────────────────
 def render_sidebar():
-    """Render sidebar navigation. Returns (page, name, browse_filters)."""
+    """Render sidebar navigation + single name input. Returns (page, name)."""
     page = st.sidebar.radio("Navigate", ["Browse", "Add Entry", "Reports"], index=0)
     st.sidebar.divider()
 
-    # ── Browse-only filters (only show when on Browse tab) ─────────
-    browse_filters = {}
-    if page == "Browse":
-        st.sidebar.markdown("#### 🔍 Quick Filter")
-        browse_filters["preset"] = st.sidebar.radio(
-            "Quick filter",
-            ["All", "Recommended only", "High ratings (≥ 8)"],
-            horizontal=False,
-            key="browse_preset",
-            label_visibility="collapsed",
-        )
-        browse_filters["show_mine"] = st.sidebar.checkbox(
-            "Show only my entries", value=False, key="show_mine_check"
-        )
-        browse_filters["search_text"] = st.sidebar.text_input(
-            "🔍 Search title", "", placeholder="Search title…", key="sidebar_search"
-        )
-        st.sidebar.divider()
-
-    # ── Name input ─────────────────────────────────────────────────
+    # Single name field — syncs to saved_name, voter_name everywhere
     stored = st.session_state.get("user_name", "")
     name_in = st.sidebar.text_input(
         "Your name",
@@ -330,7 +295,16 @@ def render_sidebar():
         st.session_state["voter_name"]   = name
         st.session_state["sidebar_name"] = name
 
-    return page, name, browse_filters
+    st.sidebar.divider()
+    st.sidebar.markdown(
+        "**How it works**\n"
+        "- Log what you watch in **Add Entry**\n"
+        "- Browse & filter in **Browse**\n"
+        "- 👍/👎 vote on any entry\n"
+        "- See charts in **Reports**\n"
+        "- Share this URL with friends"
+    )
+    return page, name
 
 
 # ─────────────────────────────────────────────
@@ -356,27 +330,27 @@ def page_add_entry(entries_ws, current_name: str):
             st.write("")
             do_search = st.button("Search", key="tmdb_search_btn", use_container_width=True)
 
-        # FIX #6: trigger search on button click only (Enter on text_input
-        # inside an expander cannot reliably fire; button is the clear trigger)
+        # Trigger search on button click only
         if do_search:
             if tmdb_q.strip():
                 with st.spinner("Searching TMDB…"):
-                    results = tmdb_search(tmdb_q.strip(), tmdb_t)
-                if results:
-                    st.session_state["tmdb_results"]   = results
-                    st.session_state["tmdb_query"]     = tmdb_q.strip()
-                    st.session_state["tmdb_type_sel"]  = tmdb_t
+                    tmdb_found = tmdb_search(tmdb_q.strip(), tmdb_t)
+                if tmdb_found:
+                    st.session_state["tmdb_results"]  = tmdb_found
+                    st.session_state["tmdb_query"]    = tmdb_q.strip()
+                    st.session_state["tmdb_type_sel"] = tmdb_t
                 else:
                     st.warning("No results found. Try a different spelling.")
                     st.session_state.pop("tmdb_results", None)
             else:
                 st.warning("Please enter a title to search.")
 
+        # Show result list — radio lets user pick the correct match
         if "tmdb_results" in st.session_state:
-            results = st.session_state["tmdb_results"]
-            options = [
-                f"{r['name']} ({r['year']})" if r.get("year") else r['name']
-                for r in results
+            tmdb_list = st.session_state["tmdb_results"]
+            options   = [
+                f"{r.get('name', '?')} ({r.get('year', '?')})"
+                for r in tmdb_list
             ]
             chosen_label = st.radio(
                 "Select the correct match:",
@@ -384,15 +358,14 @@ def page_add_entry(entries_ws, current_name: str):
                 key="tmdb_choice_radio",
             )
             chosen_idx = options.index(chosen_label) if chosen_label in options else 0
-            res = results[chosen_idx]
-
+            res = tmdb_list[chosen_idx]
             rc1, rc2 = st.columns([1, 4])
             with rc1:
                 if res.get("poster"):
                     st.image(res["poster"], width=80)
             with rc2:
                 st.info(
-                    f"**{res.get('name', '')}** ({res.get('year', '?')})  \n"
+                    f"**{res.get('name', '?')}** ({res.get('year', '?')})  \n"
                     f"Genres: {', '.join(res.get('genres', []))}"
                 )
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
@@ -404,16 +377,20 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state.pop("tmdb_results", None)
                     st.rerun()
 
-    # Read pre-fill values (set by "Use this data" or cleared after use)
-    pf_title  = st.session_state.pop("pf_title",  "")
-    pf_year   = st.session_state.pop("pf_year",   "")
-    pf_genres = st.session_state.pop("pf_genres", [])
-    pf_type   = st.session_state.pop("pf_type",   "Movie")
-    pf_poster = st.session_state.pop("pf_poster", "")
-
-    # If prefill triggered, store poster separately so form can pass it through
+    # Read pre-fill values set by "Use this data".
+    # Use .get() first so values are captured into locals, THEN delete the
+    # session keys — this prevents the pop() race where a rapid rerun
+    # clears the values before the form widget reads them.
+    pf_title  = st.session_state.get("pf_title",  "")
+    pf_year   = st.session_state.get("pf_year",   "")
+    pf_genres = st.session_state.get("pf_genres", [])
+    pf_type   = st.session_state.get("pf_type",   "Movie")
+    pf_poster = st.session_state.get("pf_poster", "")
+    # Stash poster for the form to retrieve after submit, then clear all pf_ keys
     if pf_poster:
         st.session_state["pending_poster"] = pf_poster
+    for _k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster"):
+        st.session_state.pop(_k, None)
 
     # ── Main form ───────────────────────────────────────────────────
     with st.form("add_entry_form", clear_on_submit=True):
@@ -536,16 +513,7 @@ def page_add_entry(entries_ws, current_name: str):
 # ─────────────────────────────────────────────
 #  PAGE: BROWSE
 # ─────────────────────────────────────────────
-def page_browse(entries_ws, votes_ws, browse_filters: dict):
-    # ── Top-of-page: How it works ──────────────────────────────────
-    with st.expander("ℹ️ How it works", expanded=False):
-        st.markdown(
-            "- Log what you watch in **Add Entry**\n"
-            "- Browse & filter in **Browse**\n"
-            "- 👍 / 👎 vote on any entry\n"
-            "- See charts in **Reports**\n"
-            "- Share this URL with friends"
-        )
+def page_browse(entries_ws, votes_ws):
     col_r, _ = st.columns([1, 9])
     with col_r:
         if st.button("🔄 Refresh"):
@@ -598,47 +566,38 @@ def page_browse(entries_ws, votes_ws, browse_filters: dict):
             top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
         if not top_pool.empty:
-            st.markdown("### 🍿 Tonight's Picks by Platform")
+            st.markdown("### 🍿 Tonight's picks")
             st.caption("Top-rated, community-recommended picks (not added by you).")
-
-            # Group by platform and render one section per platform
-            platforms_in_pool = top_pool["platform"].fillna("Other").unique().tolist()
-            for plat in sorted(platforms_in_pool):
-                plat_pool = top_pool[top_pool["platform"].fillna("Other") == plat]
-                if plat_pool.empty:
-                    continue
-                sample_size = min(3, len(plat_pool))
-                picks = plat_pool.sample(n=sample_size, random_state=random.randint(0, 99999))
-
-                # Build heading with platform icon
-                badge_html = platform_badge(plat)
-                st.markdown(
-                    f'<h4 style="margin-top:18px;margin-bottom:8px;">Don\'t Miss These on  - '
-                    f'{badge_html}</h4>',
-                    unsafe_allow_html=True,
-                )
-
-                pcols = st.columns(sample_size)
-                for i, (_, pr) in enumerate(picks.iterrows()):
-                    with pcols[i]:
-                        poster = pr.get("poster_url", "") or ""
-                        if poster:
-                            st.image(poster, width=70)
-                        safe_title = _html.escape(str(pr.get("title", "–") or "–"))
-                        st.markdown(
-                            f'<span style="font-weight:600;">{safe_title}</span><br>'
-                            f'{platform_badge(pr.get("platform",""))} &nbsp; '
-                            f'{rating_stars(pr.get("rating"))}',
-                            unsafe_allow_html=True,
-                        )
+            # Use random.sample for true randomness on every page load
+            sample_size = min(3, len(top_pool))
+            picks = top_pool.sample(n=sample_size, random_state=random.randint(0, 99999))
+            pcols = st.columns(sample_size)
+            for i, (_, pr) in enumerate(picks.iterrows()):
+                with pcols[i]:
+                    poster = pr.get("poster_url", "") or ""
+                    if poster:
+                        st.image(poster, width=70)
+                    st.markdown(
+                        f"**{pr.get('title','–')}**  \n"
+                        f"{platform_badge(pr.get('platform',''))} &nbsp; "
+                        f"{rating_stars(pr.get('rating'))}",
+                        unsafe_allow_html=True,
+                    )
             st.divider()
 
     # ── Quick preset + my entries ──────────────────────────────────
-       # ── Pull filters from sidebar ──────────────────────────────────
-    preset      = browse_filters.get("preset", "All")
-    show_mine   = browse_filters.get("show_mine", False)
-    search_text = browse_filters.get("search_text", "")
-    my_name     = st.session_state.get("user_name", "").strip()
+    preset = st.radio(
+        "Quick filter",
+        ["All", "Recommended only", "High ratings (≥ 8)"],
+        horizontal=True,
+        key="browse_preset",
+    )
+
+    my_name   = st.session_state.get("user_name", "").strip()
+    show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
+
+    # ── Search ─────────────────────────────────────────────────────
+    search_text = st.text_input("🔍 Search title", "", placeholder="Search title…")
 
     # ── Compact filters ────────────────────────────────────────────
     with st.expander("Filters", expanded=False):
@@ -699,6 +658,20 @@ def page_browse(entries_ws, votes_ws, browse_filters: dict):
         filtered = filtered.sort_values("timestamp", ascending=False)
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
+
+    # ── Voter name ─────────────────────────────────────────────────
+    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
+    if not voter_name:
+        voter_input = st.text_input(
+            "Your name (for voting)",
+            placeholder="Enter your name to vote",
+            key="voter_name_input_browse",
+        )
+        if voter_input.strip():
+            st.session_state["voter_name"] = voter_input.strip()
+            st.session_state["user_name"]  = voter_input.strip()
+    else:
+        st.caption(f"Voting as: **{voter_name}**")
 
     # ── FIX #4: Export + View on same row, properly aligned ────────
     st.download_button(
@@ -830,11 +803,11 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
             entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
         except (ValueError, TypeError):
             entry_id = idx + 1
-        title_txt      = _html.escape(str(row.get("title",    "—") or "—"))
-        type_txt       = _html.escape((row.get("type",    "") or "").title())
-        genre_txt      = _html.escape(str(row.get("genre",    "") or "—"))
-        added_by_txt   = _html.escape(str(row.get("added_by", "") or "Unknown"))
-        comments_txt   = _html.escape(str(row.get("comments", "") or ""))
+        title_txt      = row.get("title",    "—")
+        type_txt       = (row.get("type",    "") or "").title()
+        genre_txt      = row.get("genre",    "") or "—"
+        added_by_txt   = row.get("added_by", "") or "Unknown"
+        comments_txt   = row.get("comments", "") or ""
         poster_url     = row.get("poster_url", "") or ""
         platform_html  = platform_badge(row.get("platform", ""))
         rating_html    = rating_stars(row.get("rating"))
@@ -855,38 +828,40 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
                 f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
                 f'alt="poster" loading="lazy">'
             )
-            card_inner = (
-                f'<div style="display:flex;gap:12px;align-items:flex-start;">'
-                f'{img_html}'
-                f'<div style="flex:1;min-width:0;">'
-                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-                f'<div><span class="wlog-card-title">{title_txt}</span>'
-                f'<span class="wlog-card-meta">{type_txt} · {genre_txt}</span></div>'
-                f'<div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>'
-                f'</div>'
-                f'<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">'
-                f'{rating_html} {recommend_html} {status_html}'
-                f'</div>'
-                f'{review_html}'
-                f'<div style="margin-top:6px;">{comm_bar}</div>'
-                f'<div class="wlog-card-footer">Added by {added_by_txt}</div>'
-                f'</div>'
-                f'</div>'
-            )
+            card_inner = f"""
+<div style="display:flex;gap:12px;align-items:flex-start;">
+  {img_html}
+  <div style="flex:1;min-width:0;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <span class="wlog-card-title">{title_txt}</span>
+        <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+    </div>
+    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+      {rating_html} {recommend_html} {status_html}
+    </div>
+    {review_html}
+    <div style="margin-top:6px;">{comm_bar}</div>
+    <div class="wlog-card-footer">Added by {added_by_txt}</div>
+  </div>
+</div>"""
         else:
-            card_inner = (
-                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-                f'<div><span class="wlog-card-title">{title_txt}</span>'
-                f'<span class="wlog-card-meta">{type_txt} · {genre_txt}</span></div>'
-                f'<div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>'
-                f'</div>'
-                f'<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">'
-                f'{rating_html} {recommend_html} {status_html}'
-                f'</div>'
-                f'{review_html}'
-                f'<div style="margin-top:6px;">{comm_bar}</div>'
-                f'<div class="wlog-card-footer">Added by {added_by_txt}</div>'
-            )
+            card_inner = f"""
+<div style="display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <span class="wlog-card-title">{title_txt}</span>
+    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+</div>
+<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+  {rating_html} {recommend_html} {status_html}
+</div>
+{review_html}
+<div style="margin-top:6px;">{comm_bar}</div>
+<div class="wlog-card-footer">Added by {added_by_txt}</div>"""
 
         st.markdown(
             f'<div class="wlog-card">{card_inner}</div>',
@@ -1014,14 +989,14 @@ def main():
 
     entries_ws, votes_ws = get_sheets()
 
-    page, current_name, browse_filters = render_sidebar()
+    page, current_name = render_sidebar()
 
     if page == "Add Entry":
         page_add_entry(entries_ws, current_name)
     elif page == "Reports":
         page_reports(entries_ws)
     else:
-        page_browse(entries_ws, votes_ws, browse_filters)
+        page_browse(entries_ws, votes_ws)
 
 
 if __name__ == "__main__":
