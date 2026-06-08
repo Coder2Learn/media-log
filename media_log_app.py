@@ -291,11 +291,30 @@ def append_row(ws, row_dict: dict):
 #  SIDEBAR  (shared across all pages)
 # ─────────────────────────────────────────────
 def render_sidebar():
-    """Render sidebar navigation + single name input. Returns (page, name)."""
+    """Render sidebar navigation. Returns (page, name, browse_filters)."""
     page = st.sidebar.radio("Navigate", ["Browse", "Add Entry", "Reports"], index=0)
     st.sidebar.divider()
 
-    # Single name field — syncs to saved_name, voter_name everywhere
+    # ── Browse-only filters (only show when on Browse tab) ─────────
+    browse_filters = {}
+    if page == "Browse":
+        st.sidebar.markdown("#### 🔍 Quick Filter")
+        browse_filters["preset"] = st.sidebar.radio(
+            "Quick filter",
+            ["All", "Recommended only", "High ratings (≥ 8)"],
+            horizontal=False,
+            key="browse_preset",
+            label_visibility="collapsed",
+        )
+        browse_filters["show_mine"] = st.sidebar.checkbox(
+            "Show only my entries", value=False, key="show_mine_check"
+        )
+        browse_filters["search_text"] = st.sidebar.text_input(
+            "🔍 Search title", "", placeholder="Search title…", key="sidebar_search"
+        )
+        st.sidebar.divider()
+
+    # ── Name input ─────────────────────────────────────────────────
     stored = st.session_state.get("user_name", "")
     name_in = st.sidebar.text_input(
         "Your name",
@@ -311,16 +330,7 @@ def render_sidebar():
         st.session_state["voter_name"]   = name
         st.session_state["sidebar_name"] = name
 
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        "**How it works**\n"
-        "- Log what you watch in **Add Entry**\n"
-        "- Browse & filter in **Browse**\n"
-        "- 👍/👎 vote on any entry\n"
-        "- See charts in **Reports**\n"
-        "- Share this URL with friends"
-    )
-    return page, name
+    return page, name, browse_filters
 
 
 # ─────────────────────────────────────────────
@@ -526,7 +536,16 @@ def page_add_entry(entries_ws, current_name: str):
 # ─────────────────────────────────────────────
 #  PAGE: BROWSE
 # ─────────────────────────────────────────────
-def page_browse(entries_ws, votes_ws):
+def page_browse(entries_ws, votes_ws, browse_filters: dict):
+    # ── Top-of-page: How it works ──────────────────────────────────
+    with st.expander("ℹ️ How it works", expanded=False):
+        st.markdown(
+            "- Log what you watch in **Add Entry**\n"
+            "- Browse & filter in **Browse**\n"
+            "- 👍 / 👎 vote on any entry\n"
+            "- See charts in **Reports**\n"
+            "- Share this URL with friends"
+        )
     col_r, _ = st.columns([1, 9])
     with col_r:
         if st.button("🔄 Refresh"):
@@ -615,18 +634,11 @@ def page_browse(entries_ws, votes_ws):
             st.divider()
 
     # ── Quick preset + my entries ──────────────────────────────────
-    preset = st.radio(
-        "Quick filter",
-        ["All", "Recommended only", "High ratings (≥ 8)"],
-        horizontal=True,
-        key="browse_preset",
-    )
-
-    my_name   = st.session_state.get("user_name", "").strip()
-    show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
-
-    # ── Search ─────────────────────────────────────────────────────
-    search_text = st.text_input("🔍 Search title", "", placeholder="Search title…")
+       # ── Pull filters from sidebar ──────────────────────────────────
+    preset      = browse_filters.get("preset", "All")
+    show_mine   = browse_filters.get("show_mine", False)
+    search_text = browse_filters.get("search_text", "")
+    my_name     = st.session_state.get("user_name", "").strip()
 
     # ── Compact filters ────────────────────────────────────────────
     with st.expander("Filters", expanded=False):
@@ -687,20 +699,6 @@ def page_browse(entries_ws, votes_ws):
         filtered = filtered.sort_values("timestamp", ascending=False)
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
-
-    # ── Voter name ─────────────────────────────────────────────────
-    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
-    if not voter_name:
-        voter_input = st.text_input(
-            "Your name (for voting)",
-            placeholder="Enter your name to vote",
-            key="voter_name_input_browse",
-        )
-        if voter_input.strip():
-            st.session_state["voter_name"] = voter_input.strip()
-            st.session_state["user_name"]  = voter_input.strip()
-    else:
-        st.caption(f"Voting as: **{voter_name}**")
 
     # ── FIX #4: Export + View on same row, properly aligned ────────
     st.download_button(
@@ -1016,14 +1014,14 @@ def main():
 
     entries_ws, votes_ws = get_sheets()
 
-    page, current_name = render_sidebar()
+    page, current_name, browse_filters = render_sidebar()
 
     if page == "Add Entry":
         page_add_entry(entries_ws, current_name)
     elif page == "Reports":
         page_reports(entries_ws)
     else:
-        page_browse(entries_ws, votes_ws)
+        page_browse(entries_ws, votes_ws, browse_filters)
 
 
 if __name__ == "__main__":
