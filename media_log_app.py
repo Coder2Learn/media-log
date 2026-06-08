@@ -345,7 +345,7 @@ def page_add_entry(entries_ws, current_name: str):
 
         # FIX #6: trigger search on button click only (Enter on text_input
         # inside an expander cannot reliably fire; button is the clear trigger)
-               if do_search:
+        if do_search:
             if tmdb_q.strip():
                 with st.spinner("Searching TMDB…"):
                     results = tmdb_search(tmdb_q.strip(), tmdb_t)
