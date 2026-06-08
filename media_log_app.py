@@ -875,7 +875,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
                 f'</div>'
                 f'</div>'
             )
-            else:
+        else:
             card_inner = (
                 f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
                 f'<div><span class="wlog-card-title">{title_txt}</span>'
