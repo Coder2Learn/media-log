@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
 from datetime import datetime
 import random
+import html as _html
 
 # ─────────────────────────────────────────────
 #  CONFIG
@@ -59,10 +60,11 @@ TMDB_GENRE_MAP = {
 # ─────────────────────────────────────────────
 #  TMDB HELPER
 # ─────────────────────────────────────────────
-def tmdb_search(title: str, media_type: str) -> dict:
+def tmdb_search(title: str, media_type: str) -> list:
+    """Returns a list of up to 5 result dicts, or []."""
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
-        return {}
+        return []
     t = "tv" if media_type == "WebSeries" else "movie"
     try:
         r = requests.get(
@@ -72,19 +74,21 @@ def tmdb_search(title: str, media_type: str) -> dict:
         )
         results = r.json().get("results", [])
         if not results:
-            return {}
-        top = results[0]
-        date_field = "first_air_date" if t == "tv" else "release_date"
-        year = (top.get(date_field, "") or "")[:4]
-        genre_ids = top.get("genre_ids", [])
-        genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
-        poster = ""
-        if top.get("poster_path"):
-            poster = TMDB_IMG_BASE + top["poster_path"]
-        name = top.get("title") or top.get("name") or title
-        return {"year": year, "genres": genres, "poster": poster, "name": name}
+            return []
+        out = []
+        for top in results[:5]:
+            date_field = "first_air_date" if t == "tv" else "release_date"
+            year = (top.get(date_field, "") or "")[:4]
+            genre_ids = top.get("genre_ids", [])
+            genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
+            poster = ""
+            if top.get("poster_path"):
+                poster = TMDB_IMG_BASE + top["poster_path"]
+            name = top.get("title") or top.get("name") or title
+            out.append({"year": year, "genres": genres, "poster": poster, "name": name})
+        return out
     except Exception:
-        return {}
+        return []
 
 
 # ─────────────────────────────────────────────
@@ -92,16 +96,26 @@ def tmdb_search(title: str, media_type: str) -> dict:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    normalized = {"Disney+ Hotstar": "JioHotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
+    if not p:
+        return "—"
+    normalized = {
+        "Disney+ Hotstar": "JioHotstar",
+        "Hotstar":         "JioHotstar",
+        "SonyLiv":         "Sony LIV",
+        "ZEE5":            "Zee5",
+        "Zee5":            "Zee5",
+    }
     lookup = normalized.get(p, p)
     logo = PLATFORM_LOGOS.get(lookup, "")
+    safe_p = _html.escape(p)
     if logo:
         return (
             f'<img src="{logo}" width="14" height="14" '
-            f'style="vertical-align:middle;margin-right:4px;border-radius:2px;">'
-            f'<span style="color:inherit;">{p}</span>'
+            f'style="vertical-align:middle;margin-right:4px;border-radius:2px;" '
+            f'alt="{safe_p}">'
+            f'<span style="color:inherit;">{safe_p}</span>'
         )
-    return f'<span style="color:inherit;">{p}</span>' if p else "—"
+    return f'<span style="color:inherit;">{safe_p}</span>'
 
 
 def rating_stars(rating) -> str:
@@ -331,42 +345,50 @@ def page_add_entry(entries_ws, current_name: str):
 
         # FIX #6: trigger search on button click only (Enter on text_input
         # inside an expander cannot reliably fire; button is the clear trigger)
-        if do_search:
+               if do_search:
             if tmdb_q.strip():
                 with st.spinner("Searching TMDB…"):
-                    result = tmdb_search(tmdb_q.strip(), tmdb_t)
-                if result:
-                    st.session_state["tmdb_result"]    = result
+                    results = tmdb_search(tmdb_q.strip(), tmdb_t)
+                if results:
+                    st.session_state["tmdb_results"]   = results
                     st.session_state["tmdb_query"]     = tmdb_q.strip()
                     st.session_state["tmdb_type_sel"]  = tmdb_t
                 else:
                     st.warning("No results found. Try a different spelling.")
-                    st.session_state.pop("tmdb_result", None)
+                    st.session_state.pop("tmdb_results", None)
             else:
                 st.warning("Please enter a title to search.")
 
-        # Show result card if we have one
-        if "tmdb_result" in st.session_state:
-            res = st.session_state["tmdb_result"]
+        if "tmdb_results" in st.session_state:
+            results = st.session_state["tmdb_results"]
+            options = [
+                f"{r['name']} ({r['year']})" if r.get("year") else r['name']
+                for r in results
+            ]
+            chosen_label = st.radio(
+                "Select the correct match:",
+                options,
+                key="tmdb_choice_radio",
+            )
+            chosen_idx = options.index(chosen_label) if chosen_label in options else 0
+            res = results[chosen_idx]
+
             rc1, rc2 = st.columns([1, 4])
             with rc1:
                 if res.get("poster"):
                     st.image(res["poster"], width=80)
             with rc2:
-                st.success(
-                    f"**{res.get('name', st.session_state.get('tmdb_query',''))}** "
-                    f"({res.get('year', '?')})  \n"
+                st.info(
+                    f"**{res.get('name', '')}** ({res.get('year', '?')})  \n"
                     f"Genres: {', '.join(res.get('genres', []))}"
                 )
-                # FIX #7: use_data button sets session state then reruns
-                #          so the form below picks up prefill values
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
                     st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
                     st.session_state["pf_year"]   = res.get("year", "")
                     st.session_state["pf_genres"] = res.get("genres", [])
                     st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                     st.session_state["pf_poster"] = res.get("poster", "")
-                    st.session_state.pop("tmdb_result", None)
+                    st.session_state.pop("tmdb_results", None)
                     st.rerun()
 
     # Read pre-fill values (set by "Use this data" or cleared after use)
@@ -554,23 +576,39 @@ def page_browse(entries_ws, votes_ws):
             top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
         if not top_pool.empty:
-            st.markdown("### 🍿 Tonight's picks")
+            st.markdown("### 🍿 Tonight's Picks by Platform")
             st.caption("Top-rated, community-recommended picks (not added by you).")
-            # Use random.sample for true randomness on every page load
-            sample_size = min(3, len(top_pool))
-            picks = top_pool.sample(n=sample_size, random_state=random.randint(0, 99999))
-            pcols = st.columns(sample_size)
-            for i, (_, pr) in enumerate(picks.iterrows()):
-                with pcols[i]:
-                    poster = pr.get("poster_url", "") or ""
-                    if poster:
-                        st.image(poster, width=70)
-                    st.markdown(
-                        f"**{pr.get('title','–')}**  \n"
-                        f"{platform_badge(pr.get('platform',''))} &nbsp; "
-                        f"{rating_stars(pr.get('rating'))}",
-                        unsafe_allow_html=True,
-                    )
+
+            # Group by platform and render one section per platform
+            platforms_in_pool = top_pool["platform"].fillna("Other").unique().tolist()
+            for plat in sorted(platforms_in_pool):
+                plat_pool = top_pool[top_pool["platform"].fillna("Other") == plat]
+                if plat_pool.empty:
+                    continue
+                sample_size = min(3, len(plat_pool))
+                picks = plat_pool.sample(n=sample_size, random_state=random.randint(0, 99999))
+
+                # Build heading with platform icon
+                badge_html = platform_badge(plat)
+                st.markdown(
+                    f'<h4 style="margin-top:18px;margin-bottom:8px;">Don\'t Miss These on '
+                    f'{badge_html}</h4>',
+                    unsafe_allow_html=True,
+                )
+
+                pcols = st.columns(sample_size)
+                for i, (_, pr) in enumerate(picks.iterrows()):
+                    with pcols[i]:
+                        poster = pr.get("poster_url", "") or ""
+                        if poster:
+                            st.image(poster, width=70)
+                        safe_title = _html.escape(str(pr.get("title", "–") or "–"))
+                        st.markdown(
+                            f'<span style="font-weight:600;">{safe_title}</span><br>'
+                            f'{platform_badge(pr.get("platform",""))} &nbsp; '
+                            f'{rating_stars(pr.get("rating"))}',
+                            unsafe_allow_html=True,
+                        )
             st.divider()
 
     # ── Quick preset + my entries ──────────────────────────────────
@@ -791,11 +829,11 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
             entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
         except (ValueError, TypeError):
             entry_id = idx + 1
-        title_txt      = row.get("title",    "—")
-        type_txt       = (row.get("type",    "") or "").title()
-        genre_txt      = row.get("genre",    "") or "—"
-        added_by_txt   = row.get("added_by", "") or "Unknown"
-        comments_txt   = row.get("comments", "") or ""
+        title_txt      = _html.escape(str(row.get("title",    "—") or "—"))
+        type_txt       = _html.escape((row.get("type",    "") or "").title())
+        genre_txt      = _html.escape(str(row.get("genre",    "") or "—"))
+        added_by_txt   = _html.escape(str(row.get("added_by", "") or "Unknown"))
+        comments_txt   = _html.escape(str(row.get("comments", "") or ""))
         poster_url     = row.get("poster_url", "") or ""
         platform_html  = platform_badge(row.get("platform", ""))
         rating_html    = rating_stars(row.get("rating"))
