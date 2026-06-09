@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
 from datetime import datetime
 import random
+import html
 
 # ─────────────────────────────────────────────
 #  CONFIG
@@ -60,7 +61,7 @@ TMDB_GENRE_MAP = {
 #  TMDB HELPER
 # ─────────────────────────────────────────────
 def tmdb_search(title: str, media_type: str) -> list:
-    """Returns a list of up to 5 result dicts, or [] on failure/no results."""
+    """Return up to 5 results from TMDB as a list of dicts."""
     key = st.secrets.get("tmdb_api_key", "")
     if not key or not title.strip():
         return []
@@ -74,14 +75,16 @@ def tmdb_search(title: str, media_type: str) -> list:
         results = r.json().get("results", [])
         if not results:
             return []
+        date_field = "first_air_date" if t == "tv" else "release_date"
         out = []
-        for top in results[:5]:
-            date_field = "first_air_date" if t == "tv" else "release_date"
-            year  = (top.get(date_field, "") or "")[:4]
-            genre_ids = top.get("genre_ids", [])
+        for item in results[:5]:
+            year = (item.get(date_field, "") or "")[:4]
+            genre_ids = item.get("genre_ids", [])
             genres = list(dict.fromkeys(TMDB_GENRE_MAP.get(gid, "Other") for gid in genre_ids[:3]))
-            poster = TMDB_IMG_BASE + top["poster_path"] if top.get("poster_path") else ""
-            name   = top.get("title") or top.get("name") or title
+            poster = ""
+            if item.get("poster_path"):
+                poster = TMDB_IMG_BASE + item["poster_path"]
+            name = item.get("title") or item.get("name") or title
             out.append({"year": year, "genres": genres, "poster": poster, "name": name})
         return out
     except Exception:
@@ -93,7 +96,7 @@ def tmdb_search(title: str, media_type: str) -> list:
 # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
     p = (platform or "").strip()
-    normalized = {"Disney+ Hotstar": "JioHotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
+    normalized = {"Disney+ Hotstar": "Jio Hotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
     lookup = normalized.get(p, p)
     logo = PLATFORM_LOGOS.get(lookup, "")
     if logo:
@@ -330,42 +333,45 @@ def page_add_entry(entries_ws, current_name: str):
             st.write("")
             do_search = st.button("Search", key="tmdb_search_btn", use_container_width=True)
 
-        # Trigger search on button click only
+        # FIX #6: trigger search on button click only (Enter on text_input
+        # inside an expander cannot reliably fire; button is the clear trigger)
         if do_search:
             if tmdb_q.strip():
                 with st.spinner("Searching TMDB…"):
-                    tmdb_found = tmdb_search(tmdb_q.strip(), tmdb_t)
-                if tmdb_found:
-                    st.session_state["tmdb_results"]  = tmdb_found
-                    st.session_state["tmdb_query"]    = tmdb_q.strip()
-                    st.session_state["tmdb_type_sel"] = tmdb_t
+                    results_list = tmdb_search(tmdb_q.strip(), tmdb_t)
+                if results_list:
+                    st.session_state["tmdb_results"]   = results_list
+                    st.session_state["tmdb_query"]     = tmdb_q.strip()
+                    st.session_state["tmdb_type_sel"]  = tmdb_t
+                    st.session_state["tmdb_sel_idx"]   = 0
+                    # clear old single result key if present
+                    st.session_state.pop("tmdb_result", None)
                 else:
                     st.warning("No results found. Try a different spelling.")
                     st.session_state.pop("tmdb_results", None)
             else:
                 st.warning("Please enter a title to search.")
 
-        # Show result list — radio lets user pick the correct match
+        # Show result list if we have results
         if "tmdb_results" in st.session_state:
-            tmdb_list = st.session_state["tmdb_results"]
-            options   = [
-                f"{r.get('name', '?')} ({r.get('year', '?')})"
-                for r in tmdb_list
+            results_list = st.session_state["tmdb_results"]
+            option_labels = [
+                f"{r['name']} ({r['year'] or '?'})" for r in results_list
             ]
-            chosen_label = st.radio(
+            sel_idx = st.selectbox(
                 "Select the correct match:",
-                options,
-                key="tmdb_choice_radio",
+                options=list(range(len(option_labels))),
+                format_func=lambda i: option_labels[i],
+                key="tmdb_sel_idx",
             )
-            chosen_idx = options.index(chosen_label) if chosen_label in options else 0
-            res = tmdb_list[chosen_idx]
+            res = results_list[sel_idx]
             rc1, rc2 = st.columns([1, 4])
             with rc1:
                 if res.get("poster"):
                     st.image(res["poster"], width=80)
             with rc2:
                 st.info(
-                    f"**{res.get('name', '?')}** ({res.get('year', '?')})  \n"
+                    f"**{res.get('name', '')}** ({res.get('year', '?')})  \n"
                     f"Genres: {', '.join(res.get('genres', []))}"
                 )
                 if st.button("✅ Use this data", key="tmdb_use_btn"):
@@ -377,20 +383,17 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state.pop("tmdb_results", None)
                     st.rerun()
 
-    # Read pre-fill values set by "Use this data".
-    # Use .get() first so values are captured into locals, THEN delete the
-    # session keys — this prevents the pop() race where a rapid rerun
-    # clears the values before the form widget reads them.
+    # Read pre-fill values — use .get() so they survive across reruns until
+    # the form is actually submitted successfully (cleared in submit handler).
     pf_title  = st.session_state.get("pf_title",  "")
     pf_year   = st.session_state.get("pf_year",   "")
     pf_genres = st.session_state.get("pf_genres", [])
     pf_type   = st.session_state.get("pf_type",   "Movie")
     pf_poster = st.session_state.get("pf_poster", "")
-    # Stash poster for the form to retrieve after submit, then clear all pf_ keys
+
+    # Store poster separately so form can retrieve it after submit
     if pf_poster:
         st.session_state["pending_poster"] = pf_poster
-    for _k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster"):
-        st.session_state.pop(_k, None)
 
     # ── Main form ───────────────────────────────────────────────────
     with st.form("add_entry_form", clear_on_submit=True):
@@ -504,6 +507,9 @@ def page_add_entry(entries_ws, current_name: str):
             try:
                 append_row(entries_ws, row)
                 read_entries.clear()
+                # Clear prefill keys now that entry is saved
+                for _k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster"):
+                    st.session_state.pop(_k, None)
                 st.success(f"✅ **{title.strip()}** saved! Add another below.")
             except Exception as e:
                 st.error("Error saving entry.")
@@ -585,22 +591,22 @@ def page_browse(entries_ws, votes_ws):
                     )
             st.divider()
 
-    # ── Quick preset + my entries ──────────────────────────────────
-    preset = st.radio(
+    # ── Quick preset + my entries → SIDEBAR ──────────────────────
+    preset = st.sidebar.radio(
         "Quick filter",
         ["All", "Recommended only", "High ratings (≥ 8)"],
-        horizontal=True,
+        index=0,
         key="browse_preset",
     )
 
     my_name   = st.session_state.get("user_name", "").strip()
-    show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
+    show_mine = st.sidebar.checkbox("Show only my entries", value=False, key="show_mine_check")
 
-    # ── Search ─────────────────────────────────────────────────────
-    search_text = st.text_input("🔍 Search title", "", placeholder="Search title…")
+    # ── Search → SIDEBAR ───────────────────────────────────────────
+    search_text = st.sidebar.text_input("🔍 Search title", "", placeholder="Search title…", key="browse_search")
 
-    # ── Compact filters ────────────────────────────────────────────
-    with st.expander("Filters", expanded=False):
+    # ── Compact filters → SIDEBAR ──────────────────────────────────
+    with st.sidebar.expander("Filters", expanded=False):
         fc1, fc2, fc3, fc4, fc5 = st.columns(5)
         with fc1:
             plat_opts = sorted(df["platform"].dropna().replace("", "Unknown").unique().tolist()) \
@@ -659,21 +665,7 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # ── Voter name ─────────────────────────────────────────────────
-    # FIX #3: shown only if sidebar name is empty, so no duplicate prompt
-    if not voter_name:
-        voter_input = st.text_input(
-            "Your name (for voting)",
-            placeholder="Enter your name to vote",
-            key="voter_name_input_browse",
-        )
-        if voter_input.strip():
-            st.session_state["voter_name"] = voter_input.strip()
-            st.session_state["user_name"]  = voter_input.strip()
-    else:
-        st.caption(f"Voting as: **{voter_name}**")
-
-    # ── FIX #4: Export + View on same row, properly aligned ────────
+    # ── Export + View in main area ──────────────────────────────────
     st.download_button(
         "⬇ Export CSV",
         filtered.to_csv(index=False).encode("utf-8"),
@@ -813,6 +805,12 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
         rating_html    = rating_stars(row.get("rating"))
         status_html    = status_badge(row.get("status",    ""))
         recommend_html = recommend_badge(row.get("recommend", ""))
+        # Escape plain-text values before injecting into HTML
+        title_txt    = html.escape(str(title_txt))
+        type_txt     = html.escape(str(type_txt))
+        genre_txt    = html.escape(str(genre_txt))
+        added_by_txt = html.escape(str(added_by_txt))
+        comments_txt = html.escape(str(comments_txt))
 
         counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
         comm_bar = community_bar(counts["yes"], counts["no"])
