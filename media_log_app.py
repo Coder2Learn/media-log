@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
 from datetime import datetime
 import random
+import re
 import html
 
 # ─────────────────────────────────────────────
@@ -861,10 +862,11 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
 <div style="margin-top:6px;">{comm_bar}</div>
 <div class="wlog-card-footer">Added by {added_by_txt}</div>"""
 
-        st.markdown(
-            f'<div class="wlog-card">{card_inner}</div>',
-            unsafe_allow_html=True,
-        )
+        # Collapse to single line — Streamlit's markdown parser treats
+        # multi-line HTML with leading whitespace as code/paragraph blocks,
+        # causing raw <div> text to appear in the UI.
+        card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
+        st.markdown(card_html, unsafe_allow_html=True)
 
         _render_vote_widget(entry_id, title_txt, voter_name,
                             votes_df, votes_ws, counts["yes"], counts["no"], idx)
