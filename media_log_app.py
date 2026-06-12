@@ -661,56 +661,78 @@ def page_browse(entries_ws, votes_ws):
             )
         ]
 
-    if "timestamp" in filtered.columns:
+    # -- Sort by rating DESC
+    if "rating" in filtered.columns:
+        filtered["_rating_num"] = pd.to_numeric(filtered["rating"], errors="coerce").fillna(0)
+        filtered = filtered.sort_values("_rating_num", ascending=False).drop(columns=["_rating_num"])
+    elif "timestamp" in filtered.columns:
         filtered = filtered.sort_values("timestamp", ascending=False)
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # ── Export + View in main area ──────────────────────────────────
+    # -- Export + View
     st.download_button(
-        "⬇ Export CSV",
+        "\u2b07 Export CSV",
         filtered.to_csv(index=False).encode("utf-8"),
         "watchlist.csv",
         "text/csv",
         use_container_width=False,
     )
-
     view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
-
     st.divider()
 
-    # ── Pagination ─────────────────────────────────────────────────
-    total_filtered = len(filtered)
-    total_pages    = max(1, (total_filtered + PAGE_SIZE - 1) // PAGE_SIZE)
-    if "browse_page" not in st.session_state:
-        st.session_state.browse_page = 1
-    st.session_state.browse_page = min(st.session_state.browse_page, total_pages)
+    # -- Helpers for per-tab pagination + render
+    def _paginate_render(tab_df, tab_key, v_mode):
+        t_total = len(tab_df)
+        t_pages = max(1, (t_total + PAGE_SIZE - 1) // PAGE_SIZE)
+        pg_key  = "browse_page_" + tab_key
+        if pg_key not in st.session_state:
+            st.session_state[pg_key] = 1
+        st.session_state[pg_key] = min(st.session_state[pg_key], t_pages)
+        page_start = (st.session_state[pg_key] - 1) * PAGE_SIZE
+        page_data  = tab_df.iloc[page_start : page_start + PAGE_SIZE]
+        if t_pages > 1:
+            pg1, pg2, pg3 = st.columns([1, 3, 1])
+            with pg1:
+                if st.button("\u25c4 Prev", disabled=st.session_state[pg_key] <= 1,
+                             key="prev_" + tab_key):
+                    st.session_state[pg_key] -= 1
+                    st.rerun()
+            with pg2:
+                st.markdown(
+                    "<div style='text-align:center;color:#9ca3af;font-size:0.85rem;"
+                    "padding-top:6px;'>Page " + str(st.session_state[pg_key]) +
+                    " of " + str(t_pages) + "</div>",
+                    unsafe_allow_html=True,
+                )
+            with pg3:
+                if st.button("Next \u25ba", disabled=st.session_state[pg_key] >= t_pages,
+                             key="next_" + tab_key):
+                    st.session_state[pg_key] += 1
+                    st.rerun()
+        if v_mode == "Cards":
+            _render_cards(page_data, vote_summary, votes_df, votes_ws)
+        else:
+            _render_table(page_data, vote_summary)
 
-    page_start = (st.session_state.browse_page - 1) * PAGE_SIZE
-    page_data  = filtered.iloc[page_start : page_start + PAGE_SIZE]
+    movies_df = filtered[filtered["type"].str.strip().str.lower() == "movie"] if "type" in filtered.columns else filtered.iloc[0:0]
+    series_df = filtered[filtered["type"].str.strip().str.lower() == "webseries"] if "type" in filtered.columns else filtered.iloc[0:0]
 
-    if total_pages > 1:
-        pg1, pg2, pg3 = st.columns([1, 3, 1])
-        with pg1:
-            if st.button("◀ Prev", disabled=st.session_state.browse_page <= 1):
-                st.session_state.browse_page -= 1
-                st.rerun()
-        with pg2:
-            st.markdown(
-                f"<div style='text-align:center;color:#9ca3af;font-size:0.85rem;padding-top:6px;'>"
-                f"Page {st.session_state.browse_page} of {total_pages}</div>",
-                unsafe_allow_html=True,
-            )
-        with pg3:
-            if st.button("Next ▶", disabled=st.session_state.browse_page >= total_pages):
-                st.session_state.browse_page += 1
-                st.rerun()
+    # -- Type tabs
+    tab_all, tab_movies, tab_series = st.tabs(["\U0001f3ac All", "\U0001f3a5 Movies", "\U0001f4fa Web Series"])
+    with tab_all:
+        _paginate_render(filtered, "all", view_mode)
+    with tab_movies:
+        if movies_df.empty:
+            st.info("No movies match the current filters.")
+        else:
+            _paginate_render(movies_df, "movies", view_mode)
+    with tab_series:
+        if series_df.empty:
+            st.info("No web series match the current filters.")
+        else:
+            _paginate_render(series_df, "series", view_mode)
 
-    # ── Render ─────────────────────────────────────────────────────
-    if view_mode == "Cards":
-        _render_cards(page_data, vote_summary, votes_df, votes_ws)
-    else:
-        _render_table(page_data, vote_summary)
 
 
 # ─────────────────────────────────────────────
