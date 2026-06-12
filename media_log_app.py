@@ -682,14 +682,6 @@ def page_browse(entries_ws, votes_ws):
 
     st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-    # -- Export + View
-    st.download_button(
-        "\u2b07 Export CSV",
-        filtered.to_csv(index=False).encode("utf-8"),
-        "watchlist.csv",
-        "text/csv",
-        use_container_width=False,
-    )
     view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
     st.divider()
 
