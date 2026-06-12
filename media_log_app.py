@@ -41,7 +41,7 @@ LANGUAGES = ["", "Hindi", "English", "Tamil", "Telugu", "Malayalam",
              "Kannada", "Bengali", "Marathi", "Other"]
 
 COLUMNS = [
-    "timestamp", "added_by", "title", "type", "genre",
+    "entry_id", "timestamp", "added_by", "title", "type", "genre",
     "platform", "status", "rating", "recommend",
     "watched_year", "language", "comments", "poster_url",
 ]
@@ -490,7 +490,19 @@ def page_add_entry(entries_ws, current_name: str):
             # Retrieve poster that was stashed before form render
             poster_url = st.session_state.pop("pending_poster", "")
 
+            # Compute next entry_id safely
+            try:
+                existing_df = read_entries(entries_ws)
+                if "entry_id" in existing_df.columns and not existing_df.empty:
+                    max_id = pd.to_numeric(existing_df["entry_id"], errors="coerce").dropna()
+                    next_id = int(max_id.max()) + 1 if not max_id.empty else 1
+                else:
+                    next_id = len(existing_df) + 1
+            except Exception:
+                next_id = 1
+
             row = {
+                "entry_id":     next_id,
                 "timestamp":    datetime.now().isoformat(timespec="seconds"),
                 "added_by":     added_by.strip(),
                 "title":        title.strip(),
