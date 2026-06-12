@@ -548,45 +548,45 @@ def page_browse(entries_ws, votes_ws):
         if st.button("🔍", key="open_search_popup", help="Search titles"):
             st.session_state["show_search_popup"] = True
 
-if "show_search_popup" not in st.session_state:
-    st.session_state["show_search_popup"] = False
+    if "show_search_popup" not in st.session_state:
+        st.session_state["show_search_popup"] = False
 
-if st.session_state["show_search_popup"]:
-    st.markdown("""
-    <style>
-    .search-overlay {
-        position: fixed;
-        top: 70px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(900px, 92vw);
-        background: #111827;
-        border: 1px solid rgba(148,163,184,0.18);
-        border-radius: 16px;
-        padding: 18px;
-        z-index: 9999;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
-    }
-    </style>
-    <div class="search-overlay"></div>
-    """, unsafe_allow_html=True)
+    if st.session_state["show_search_popup"]:
+        st.markdown("""
+        <style>
+        .search-overlay {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(900px, 92vw);
+            background: #111827;
+            border: 1px solid rgba(148,163,184,0.18);
+            border-radius: 16px;
+            padding: 18px;
+            z-index: 9999;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+        }
+        </style>
+        <div class="search-overlay"></div>
+        """, unsafe_allow_html=True)
 
-    pop_a, pop_b = st.columns([10, 1])
-    with pop_a:
-        search_text = st.text_input(
-            "Search",
-            value=st.session_state.get("browse_search", ""),
-            placeholder="Search for movies or web series...",
-            label_visibility="collapsed",
-            key="browse_search_popup",
-        )
-        st.session_state["browse_search"] = search_text
-    with pop_b:
-        if st.button("✕", key="close_search_popup"):
-            st.session_state["show_search_popup"] = False
-            st.rerun()
-else:
-    search_text = st.session_state.get("browse_search", "")
+        pop_a, pop_b = st.columns([10, 1])
+        with pop_a:
+            search_text = st.text_input(
+                "Search",
+                value=st.session_state.get("browse_search", ""),
+                placeholder="Search for movies or web series...",
+                label_visibility="collapsed",
+                key="browse_search_popup",
+            )
+            st.session_state["browse_search"] = search_text
+        with pop_b:
+            if st.button("✕", key="close_search_popup"):
+                st.session_state["show_search_popup"] = False
+                st.rerun()
+    else:
+        search_text = st.session_state.get("browse_search", "")
 
     df           = read_entries(entries_ws)
     votes_df     = read_votes(votes_ws)
