@@ -568,7 +568,6 @@ def page_browse(entries_ws, votes_ws):
             box-shadow: 0 20px 60px rgba(0,0,0,0.45);
         }
         </style>
-        <div class="search-overlay"></div>
         """, unsafe_allow_html=True)
 
         pop_a, pop_b = st.columns([10, 1])
