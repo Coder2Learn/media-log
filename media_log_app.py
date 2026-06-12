@@ -453,14 +453,18 @@ def page_add_entry(entries_ws, current_name: str):
                     "Recommend?", ["Yes", "No"], horizontal=True, index=0
                 ).lower()
             with c10:
+                min_year = 1900
+                max_year = datetime.now().year + 1
                 try:
-                    yr_default = int(pf_year) if pf_year else datetime.now().year
-                except ValueError:
+                    yr_default = int(float(pf_year)) if str(pf_year).strip() else datetime.now().year
+                except (ValueError, TypeError):
                     yr_default = datetime.now().year
+                yr_default= max(min_year, min(yr_default,max_year))
+
                 watched_year = st.number_input(
                     "Year watched",
-                    min_value=1990,
-                    max_value=datetime.now().year + 1,
+                    min_value=min_year,
+                    max_value=max_year,
                     value=yr_default,
                     step=1,
                 )
