@@ -537,12 +537,56 @@ def page_add_entry(entries_ws, current_name: str):
 #  PAGE: BROWSE
 # ─────────────────────────────────────────────
 def page_browse(entries_ws, votes_ws):
-    col_r, _ = st.columns([1, 9])
-    with col_r:
+    top_l, top_r = st.columns([9, 1])
+    with top_l:
         if st.button("🔄 Refresh"):
             read_entries.clear()
             read_votes.clear()
             st.rerun()
+
+    with top_r:
+        if st.button("🔍", key="open_search_popup", help="Search titles"):
+            st.session_state["show_search_popup"] = True
+
+if "show_search_popup" not in st.session_state:
+    st.session_state["show_search_popup"] = False
+
+if st.session_state["show_search_popup"]:
+    st.markdown("""
+    <style>
+    .search-overlay {
+        position: fixed;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(900px, 92vw);
+        background: #111827;
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 16px;
+        padding: 18px;
+        z-index: 9999;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    }
+    </style>
+    <div class="search-overlay"></div>
+    """, unsafe_allow_html=True)
+
+    pop_a, pop_b = st.columns([10, 1])
+    with pop_a:
+        search_text = st.text_input(
+            "Search",
+            value=st.session_state.get("browse_search", ""),
+            placeholder="Search for movies or web series...",
+            label_visibility="collapsed",
+            key="browse_search_popup",
+        )
+        st.session_state["browse_search"] = search_text
+    with pop_b:
+        if st.button("✕", key="close_search_popup"):
+            st.session_state["show_search_popup"] = False
+            st.rerun()
+else:
+    search_text = st.session_state.get("browse_search", "")
 
     df           = read_entries(entries_ws)
     votes_df     = read_votes(votes_ws)
@@ -618,9 +662,6 @@ def page_browse(entries_ws, votes_ws):
 
     my_name   = st.session_state.get("user_name", "").strip()
     show_mine = st.sidebar.checkbox("Show only my entries", value=False, key="show_mine_check")
-
-    # ── Search → SIDEBAR ───────────────────────────────────────────
-    search_text = st.sidebar.text_input("🔍 Search title", "", placeholder="Search title…", key="browse_search")
 
     # ── Compact filters → SIDEBAR ──────────────────────────────────
     with st.sidebar.expander("Filters", expanded=False):
@@ -719,7 +760,7 @@ def page_browse(entries_ws, votes_ws):
                     st.session_state[pg_key] += 1
                     st.rerun()
         if v_mode == "Cards":
-            _render_cards(page_data, vote_summary, votes_df, votes_ws)
+            _render_cards(page_data, vote_summary, votes_df, votes_ws, render_scope=tab_key)
         else:
             _render_table(page_data, vote_summary)
 
@@ -812,7 +853,7 @@ def _inject_card_css():
         _card_css_injected = True
 
 
-def _render_cards(filtered, vote_summary, votes_df, votes_ws):
+def _render_cards(filtered, vote_summary, votes_df, votes_ws, render_scope="main"):
     _inject_card_css()
     if filtered.empty:
         st.info("No entries match the current filters.")
@@ -898,8 +939,8 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
         card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
         st.markdown(card_html, unsafe_allow_html=True)
 
-        _render_vote_widget(entry_id, title_txt, voter_name,
-                            votes_df, votes_ws, counts["yes"], counts["no"], idx)
+        _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope
+        )
         st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
 
@@ -907,7 +948,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws):
 #  VOTE WIDGET
 # ─────────────────────────────────────────────
 def _render_vote_widget(entry_id, title_txt, voter_name,
-                        votes_df, votes_ws, yes_cnt, no_cnt, card_idx):
+                        votes_df, votes_ws, yes_cnt, no_cnt, card_idx, render_scope):
     voted_key        = f"voted_{entry_id}"
     voted_in_sheet   = voter_name and already_voted(votes_df, entry_id, voter_name)
     voted_in_session = st.session_state.get(voted_key, None)
@@ -929,7 +970,7 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
 
     if voter_name and not voted_in_sheet and not voted_in_session:
         with yes_col:
-            if st.button("👍", key=f"yes_{entry_id}_{card_idx}", help=f"Recommend {title_txt}"):
+            if st.button("👍", key=f"yes_{render_scope}_{entry_id}_{card_idx}", help=f"Recommend {title_txt}"):
                 try:
                     cast_vote(votes_ws, entry_id, voter_name, "yes")
                     st.session_state[voted_key] = "👍 yes"
@@ -939,7 +980,7 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
                     st.error("Could not save vote.")
                     st.exception(e)
         with no_col:
-            if st.button("👎", key=f"no_{entry_id}_{card_idx}", help=f"Skip {title_txt}"):
+            if st.button("👎", key=f"no_{render_scope}_{entry_id}_{card_idx}", help=f"Skip {title_txt}"):
                 try:
                     cast_vote(votes_ws, entry_id, voter_name, "no")
                     st.session_state[voted_key] = "👎 no"
