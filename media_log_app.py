@@ -370,7 +370,11 @@ def render_entry_detail(entry_row, vote_summary):
 
       raw_entry_id = entry_row.get("entry_id", 0)
       try:
-          entry_id = int(float(raw_entry_id))
+          _eid_s = str(raw_entry_id).strip()
+          if _eid_s.endswith(".0"):
+              entry_id = int(_eid_s[:-2])
+          else:
+              entry_id = int(_eid_s) if _eid_s not in ("", "nan", "None") else 0
       except (ValueError, TypeError):
           entry_id = 0
 
@@ -1062,9 +1066,24 @@ def page_browse(entries_ws, votes_ws):
 
       selected_entry_id = st.session_state.get("selected_entry_id")
       if selected_entry_id is not None:
-          selected_df = df[df["entry_id"].astype(str) == str(selected_entry_id)]
+          # Strip trailing .0 from sheet-returned floats WITHOUT going through float()
+          # (float() loses precision on 17-digit IDs > 2^53)
+          def _norm_eid(v):
+              s = str(v).strip()
+              if s.endswith(".0"):
+                  s = s[:-2]
+              return s
+          sel_str = _norm_eid(selected_entry_id)
+          df_copy = df.copy()
+          df_copy["_eid_str"] = df_copy["entry_id"].apply(_norm_eid)
+          selected_df = df_copy[df_copy["_eid_str"] == sel_str].drop(columns=["_eid_str"])
           if not selected_df.empty:
-              render_entry_detail(selected_df.iloc[0], vote_summary)
+              try:
+                  render_entry_detail(selected_df.iloc[0], vote_summary)
+              except Exception as _det_err:
+                  st.error(f"Error rendering detail view: {_det_err}")
+                  st.session_state.pop("selected_entry_id", None)
+                  st.rerun()
               return
           st.session_state.pop("selected_entry_id", None)
 
@@ -1429,7 +1448,14 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
       for idx, (_, row) in enumerate(filtered.iterrows()):
           raw_entry_id = row.get("entry_id", 0)
           try:
-              entry_id = int(float(raw_entry_id)) if str(raw_entry_id).strip() not in ("", "nan", "None") else idx + 1
+              # Avoid float() conversion — it loses precision on 17-digit IDs (> 2^53)
+              _eid_s = str(raw_entry_id).strip()
+              if _eid_s in ("", "nan", "None"):
+                  entry_id = idx + 1
+              elif _eid_s.endswith(".0"):
+                  entry_id = int(_eid_s[:-2])
+              else:
+                  entry_id = int(_eid_s)
           except (ValueError, TypeError):
               entry_id = idx + 1
           title_txt      = row.get("title",    "—")
