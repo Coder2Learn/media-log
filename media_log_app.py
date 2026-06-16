@@ -124,7 +124,7 @@ def tmdb_fetch_details(title: str, media_type: str) -> dict:
           if not results:
               return {}
 
-          best = results[0]
+          best = _pick_tmdb_result(results, title) or results[0]
           tmdb_id = best.get("id")
           if not tmdb_id:
               return {}
@@ -367,14 +367,25 @@ DETAIL_CSS = """
 
 def render_entry_detail(entry_row, vote_summary):
       st.markdown(DETAIL_CSS, unsafe_allow_html=True)
+      st.markdown('<div id="detail-top"></div>', unsafe_allow_html=True)
+      st.markdown("""
+      <script>
+      (function() {
+        const root = window.parent || window;
+        try { root.scrollTo({top: 0, behavior: 'auto'}); } catch (e) {}
+        setTimeout(function(){
+          try { root.scrollTo({top: 0, behavior: 'auto'}); } catch (e) {}
+          const el = document.getElementById('detail-top');
+          if (el) { try { el.scrollIntoView({behavior:'auto', block:'start'}); } catch (e) {} }
+        }, 40);
+      })();
+      </script>
+      """, unsafe_allow_html=True)
 
       raw_entry_id = entry_row.get("entry_id", 0)
       try:
-          _eid_s = str(raw_entry_id).strip()
-          if _eid_s.endswith(".0"):
-              entry_id = int(_eid_s[:-2])
-          else:
-              entry_id = int(_eid_s) if _eid_s not in ("", "nan", "None") else 0
+          _eid_s = _normalize_entry_id(raw_entry_id)
+          entry_id = int(_eid_s) if _eid_s not in ("", "nan", "None") else 0
       except (ValueError, TypeError):
           entry_id = 0
 
@@ -403,6 +414,7 @@ def render_entry_detail(entry_row, vote_summary):
       title_html = html.escape(tmdb.get("name") or title or "Untitled")
       type_html = html.escape(media_type or "—")
       platform_html = platform_badge(entry_row.get("platform", ""))
+      platform_chip_html = _platform_chip_html(entry_row.get("platform", ""))
       status_html = status_badge(entry_row.get("status", ""))
       recommend_html = recommend_badge(entry_row.get("recommend", ""))
       rating_html = rating_stars(entry_row.get("rating"))
@@ -411,6 +423,8 @@ def render_entry_detail(entry_row, vote_summary):
       tmdb_rating_chip = f'<span class="detail-chip">TMDB {round(user_rating, 1)}/10</span>' if user_rating is not None else ""
       runtime = tmdb.get("runtime")
       runtime_chip = f'<span class="detail-chip">{html.escape(str(runtime))} min</span>' if runtime else ""
+
+      meta_html = f'<div class="detail-meta">{platform_chip_html}{tmdb_rating_chip}{runtime_chip}{status_html}{recommend_html}</div>'
 
       hero_html = f"""
       <div class="detail-shell">
@@ -425,13 +439,7 @@ def render_entry_detail(entry_row, vote_summary):
                 <div class="detail-kicker">{type_html}{f' • {html.escape(release_year)}' if release_year else ''}</div>
                 <div class="detail-title">{title_html}</div>
                 {f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''}
-                <div class="detail-meta">
-                  <span class="detail-chip">{platform_html}</span>
-                  {tmdb_rating_chip}
-                  {runtime_chip}
-                  {status_html}
-                  {recommend_html}
-                </div>
+                {meta_html}
                 <div style="margin-bottom:14px;">{genre_html}</div>
                 <div class="detail-overview">{html.escape(overview) if overview else 'No overview available yet.'}</div>
               </div>
@@ -462,22 +470,20 @@ def render_entry_detail(entry_row, vote_summary):
           watched_with = str(entry_row.get("watched_with", "") or "").strip()
           added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
 
-          st.markdown(
-              f"""
-              <div class="detail-panel">
-                <h4>Community</h4>
-                <div style="margin-bottom:14px;">{community_html}</div>
-                <div class="detail-fact-label">Your rating</div>
-                <div class="detail-fact-value">{html.escape(str(entry_row.get('rating', '—') or '—'))} / 10</div>
-                <div class="detail-fact-label">Added by</div>
-                <div class="detail-fact-value">{html.escape(added_by)}</div>
-                {f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''}
-                <div class="detail-fact-label">Review</div>
-                <div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;">{html.escape(comments_text) if comments_text else 'No review added yet.'}</div>
-              </div>
-              """,
-              unsafe_allow_html=True,
-          )
+          community_panel = f"""
+          <div class="detail-panel">
+            <h4>Community</h4>
+            <div style="margin-bottom:14px;">{community_html}</div>
+            <div class="detail-fact-label">Your rating</div>
+            <div class="detail-fact-value">{html.escape(str(entry_row.get('rating', '—') or '—'))} / 10</div>
+            <div class="detail-fact-label">Added by</div>
+            <div class="detail-fact-value">{html.escape(added_by)}</div>
+            {f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''}
+            <div class="detail-fact-label">Review</div>
+            <div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{html.escape(comments_text) if comments_text else 'No review added yet.'}</div>
+          </div>
+          """
+          st.markdown(community_panel, unsafe_allow_html=True)
 
       with right_col:
           tmdb_lang = (tmdb.get("language") or entry_row.get("language", "") or "").strip()
@@ -513,11 +519,12 @@ def render_entry_detail(entry_row, vote_summary):
 
           if tmdb.get("trailer_url"):
               st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
+              st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
       cast = tmdb.get("cast", [])
       if cast:
           st.markdown("### Cast")
-          cast_cols = st.columns(4)
+          cast_cols = st.columns(2)
           for i, person in enumerate(cast[:8]):
               with cast_cols[i % 4]:
                   img = person.get("profile_url", "")
@@ -1068,14 +1075,9 @@ def page_browse(entries_ws, votes_ws):
       if selected_entry_id is not None:
           # Strip trailing .0 from sheet-returned floats WITHOUT going through float()
           # (float() loses precision on 17-digit IDs > 2^53)
-          def _norm_eid(v):
-              s = str(v).strip()
-              if s.endswith(".0"):
-                  s = s[:-2]
-              return s
-          sel_str = _norm_eid(selected_entry_id)
+          sel_str = _normalize_entry_id(selected_entry_id)
           df_copy = df.copy()
-          df_copy["_eid_str"] = df_copy["entry_id"].apply(_norm_eid)
+          df_copy["_eid_str"] = df_copy["entry_id"].apply(_normalize_entry_id)
           selected_df = df_copy[df_copy["_eid_str"] == sel_str].drop(columns=["_eid_str"])
           if not selected_df.empty:
               try:
@@ -1543,7 +1545,9 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
           action_col, _ = st.columns([1.35, 8.65])
           with action_col:
               if st.button("View Details", key=f"view_{entry_id}_{idx}_{render_scope}", use_container_width=True):
-                  st.session_state["selected_entry_id"] = entry_id
+                  st.session_state["selected_entry_id"] = _normalize_entry_id(raw_entry_id)
+                  st.session_state["selected_entry_title"] = str(row.get("title", "") or "").strip()
+                  st.session_state["selected_entry_type"] = str(row.get("type", "") or "").strip()
                   st.rerun()
 
           # Vote + Edit/Delete row
