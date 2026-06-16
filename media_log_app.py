@@ -136,7 +136,21 @@ def tmdb_fetch_details(title: str, media_type: str) -> dict:
               profile_url = ("https://image.tmdb.org/t/p/w185" + c["profile_path"]) if c.get("profile_path") else ""
               cast.append({"name": c.get("name", ""), "character": c.get("character", ""), "profile_url": profile_url})
           genres = [g.get("name", "") for g in data.get("genres", []) if g.get("name")]
-          return {"name": data.get("title") or data.get("name") or title, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url}
+          seasons = []
+          for s in data.get("seasons", []) or []:
+              if not s:
+                  continue
+              season_poster = ("https://image.tmdb.org/t/p/w342" + s["poster_path"]) if s.get("poster_path") else ""
+              seasons.append({
+                  "season_number": s.get("season_number"),
+                  "name": s.get("name", ""),
+                  "air_date": s.get("air_date", ""),
+                  "episode_count": s.get("episode_count"),
+                  "overview": s.get("overview", ""),
+                  "poster_url": season_poster,
+              })
+          next_episode = data.get("next_episode_to_air") or {}
+          return {"name": data.get("title") or data.get("name") or title, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
       except Exception:
           return {}
 
@@ -146,7 +160,7 @@ def tmdb_fetch_details(title: str, media_type: str) -> dict:
   # ─────────────────────────────────────────────
 DETAIL_CSS = """
 <style>
-.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-card{border:1px solid rgba(148,163,184,.10);border-radius:16px;padding:10px;background:rgba(255,255,255,.03);height:100%}.cast-avatar{width:100%;aspect-ratio:.78;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.cast-placeholder{width:100%;aspect-ratio:.78;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.82rem}.cast-name{margin-top:10px;color:#f8fafc;font-size:.84rem;font-weight:750;line-height:1.25}.cast-role{margin-top:4px;color:#94a3b8;font-size:.73rem;line-height:1.25}
+.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-card{border:1px solid rgba(148,163,184,.10);border-radius:16px;padding:10px;background:rgba(255,255,255,.03);height:100%}.cast-avatar{width:100%;aspect-ratio:.78;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.cast-placeholder{width:100%;aspect-ratio:.78;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.82rem}.cast-name{margin-top:10px;color:#f8fafc;font-size:.84rem;font-weight:750;line-height:1.25}.cast-role{margin-top:4px;color:#94a3b8;font-size:.73rem;line-height:1.25}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}
 </style>
 """
 
@@ -189,7 +203,11 @@ def render_entry_detail(entry_row, vote_summary):
       tmdb_rating_chip = f'<span class="detail-chip">TMDB {round(user_rating, 1)}/10</span>' if user_rating is not None else ""
       runtime = tmdb.get("runtime")
       runtime_chip = f'<span class="detail-chip">{html.escape(str(runtime))} min</span>' if runtime else ""
-      meta_html = f'<div class="detail-meta">{platform_chip_html}{tmdb_rating_chip}{runtime_chip}{status_html}{recommend_html}</div>'
+      season_count = tmdb.get("number_of_seasons")
+      episode_count = tmdb.get("number_of_episodes")
+      season_chip = f'<span class="detail-chip">{html.escape(str(season_count))} Seasons</span>' if media_type == "Webseries" and season_count else ""
+      episode_chip = f'<span class="detail-chip">{html.escape(str(episode_count))} Episodes</span>' if media_type == "Webseries" and episode_count else ""
+      meta_html = f'<div class="detail-meta">{platform_chip_html}{tmdb_rating_chip}{runtime_chip}{season_chip}{episode_chip}{status_html}{recommend_html}</div>'
       poster_markup = f'<img src="{html.escape(poster_url)}" alt="poster" loading="lazy">' if poster_url else '<div style="height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;">No Poster</div>'
       tag_html = f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''
       year_html = f' • {html.escape(release_year)}' if release_year else ''
@@ -209,7 +227,15 @@ def render_entry_detail(entry_row, vote_summary):
       with right_col:
           tmdb_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip()
           tmdb_votes = tmdb.get("tmdb_votes")
-          facts_html = f'<div class="detail-panel"><h4>Facts</h4><div class="detail-fact-label">Platform</div><div class="detail-fact-value">{html.escape(str(entry_row.get("platform", "") or "—"))}</div><div class="detail-fact-label">Type</div><div class="detail-fact-value">{type_html}</div><div class="detail-fact-label">Language</div><div class="detail-fact-value">{html.escape(tmdb_lang or "—")}</div><div class="detail-fact-label">Release / Year</div><div class="detail-fact-value">{html.escape(release_date or str(entry_row.get("watched_year", "") or "—"))}</div><div class="detail-fact-label">Runtime</div><div class="detail-fact-value">{html.escape(str(runtime)) + " min" if runtime else "—"}</div><div class="detail-fact-label">TMDB Rating</div><div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else "—"}</div><div class="detail-fact-label">TMDB Votes</div><div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else "—"}</div></div>'
+          next_ep = tmdb.get("next_episode_to_air") or {}
+          season_facts_html = ""
+          if media_type == "Webseries":
+              season_facts_html += f'<div class="detail-fact-label">Total Seasons</div><div class="detail-fact-value">{html.escape(str(tmdb.get("number_of_seasons") or "—"))}</div>'
+              season_facts_html += f'<div class="detail-fact-label">Total Episodes</div><div class="detail-fact-value">{html.escape(str(tmdb.get("number_of_episodes") or "—"))}</div>'
+              season_facts_html += f'<div class="detail-fact-label">Last Air Date</div><div class="detail-fact-value">{html.escape(str(tmdb.get("last_air_date") or "—"))}</div>'
+              next_ep_label = f"{next_ep.get('name','Episode')} (Ep {next_ep.get('episode_number')}) - {next_ep.get('air_date','—')}" if next_ep else "—"
+              season_facts_html += f'<div class="detail-fact-label">Next Episode</div><div class="detail-fact-value">{html.escape(next_ep_label)}</div>'
+          facts_html = f'<div class="detail-panel"><h4>Facts</h4><div class="detail-fact-label">Platform</div><div class="detail-fact-value">{html.escape(str(entry_row.get("platform", "") or "—"))}</div><div class="detail-fact-label">Type</div><div class="detail-fact-value">{type_html}</div><div class="detail-fact-label">Language</div><div class="detail-fact-value">{html.escape(tmdb_lang or "—")}</div><div class="detail-fact-label">Release / Year</div><div class="detail-fact-value">{html.escape(release_date or str(entry_row.get("watched_year", "") or "—"))}</div><div class="detail-fact-label">Runtime</div><div class="detail-fact-value">{html.escape(str(runtime)) + " min" if runtime else "—"}</div><div class="detail-fact-label">TMDB Rating</div><div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else "—"}</div><div class="detail-fact-label">TMDB Votes</div><div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else "—"}</div>{season_facts_html}</div>'
           st.markdown(facts_html, unsafe_allow_html=True)
           if tmdb.get("trailer_url"):
               st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
@@ -224,6 +250,25 @@ def render_entry_detail(entry_row, vote_summary):
                   role = html.escape(person.get("character", "") or "")
                   img_html = f'<img class="cast-avatar" src="{html.escape(img)}" alt="cast" loading="lazy">' if img else '<div class="cast-placeholder">No Image</div>'
                   st.markdown(f'<div class="cast-card">{img_html}<div class="cast-name">{name}</div><div class="cast-role">{role}</div></div>', unsafe_allow_html=True)
+      seasons = tmdb.get("seasons", [])
+      if media_type == "Webseries" and seasons:
+          st.markdown("### Seasons")
+          for season in seasons:
+              season_name = html.escape(str(season.get("name") or f"Season {season.get('season_number','')}").strip())
+              season_num = season.get("season_number")
+              episode_count = season.get("episode_count")
+              air_date = html.escape(str(season.get("air_date") or "—"))
+              overview_txt = html.escape(str(season.get("overview") or "No season overview available."))
+              poster = season.get("poster_url", "")
+              meta_line = []
+              if season_num is not None:
+                  meta_line.append(f"Season {season_num}")
+              if episode_count:
+                  meta_line.append(f"{episode_count} episodes")
+              meta_line.append(air_date)
+              meta_html = " • ".join(meta_line)
+              poster_html = f'<img class="season-poster" src="{html.escape(poster)}" alt="season poster" loading="lazy">' if poster else '<div class="season-placeholder">No Poster</div>'
+              st.markdown(f'<div class="season-card">{poster_html}<div><div class="season-title">{season_name}</div><div class="season-meta">{meta_html}</div><div class="season-overview">{overview_txt}</div></div></div>', unsafe_allow_html=True)
 
 
 def platform_badge(platform: str) -> str:
