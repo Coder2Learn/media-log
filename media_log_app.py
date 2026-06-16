@@ -106,293 +106,63 @@ def tmdb_search(title: str, media_type: str) -> list:
 
 @st.cache_data(ttl=3600)
 def tmdb_fetch_details(title: str, media_type: str) -> dict:
-      """Fetch rich TMDB details for a single title. Cached for 1 hour."""
       key = st.secrets.get("tmdb_api_key", "")
       if not key or not title.strip():
           return {}
-
       t = "tv" if media_type == "WebSeries" else "movie"
-
       try:
-          sr = requests.get(
-              f"{TMDB_BASE}/search/{t}",
-              params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
-              timeout=6,
-          )
+          sr = requests.get(f"{TMDB_BASE}/search/{t}", params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1}, timeout=6)
           sr.raise_for_status()
           results = sr.json().get("results", [])
           if not results:
               return {}
-
-          best = _pick_tmdb_result(results, title) or results[0]
+          best = _pick_tmdb_result(results, title, None) or results[0]
           tmdb_id = best.get("id")
           if not tmdb_id:
               return {}
-
-          dr = requests.get(
-              f"{TMDB_BASE}/{t}/{tmdb_id}",
-              params={
-                  "api_key": key,
-                  "language": "en-US",
-                  "append_to_response": "credits,videos"
-              },
-              timeout=8,
-          )
+          dr = requests.get(f"{TMDB_BASE}/{t}/{tmdb_id}", params={"api_key": key, "language": "en-US", "append_to_response": "credits,videos"}, timeout=8)
           dr.raise_for_status()
           data = dr.json()
-
-          poster_url = ""
-          backdrop_url = ""
-
-          if data.get("poster_path"):
-              poster_url = "https://image.tmdb.org/t/p/w342" + data["poster_path"]
-          elif best.get("poster_path"):
-              poster_url = "https://image.tmdb.org/t/p/w342" + best["poster_path"]
-
-          if data.get("backdrop_path"):
-              backdrop_url = "https://image.tmdb.org/t/p/w1280" + data["backdrop_path"]
-          elif best.get("backdrop_path"):
-              backdrop_url = "https://image.tmdb.org/t/p/w1280" + best["backdrop_path"]
-
+          poster_url = ("https://image.tmdb.org/t/p/w342" + data["poster_path"]) if data.get("poster_path") else (("https://image.tmdb.org/t/p/w342" + best["poster_path"]) if best.get("poster_path") else "")
+          backdrop_url = ("https://image.tmdb.org/t/p/w1280" + data["backdrop_path"]) if data.get("backdrop_path") else (("https://image.tmdb.org/t/p/w1280" + best["backdrop_path"]) if best.get("backdrop_path") else "")
           videos = data.get("videos", {}).get("results", [])
           trailer_url = ""
           for v in videos:
               if v.get("site") == "YouTube" and v.get("key") and v.get("type") in ("Trailer", "Teaser"):
                   trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
                   break
-
           cast = []
           for c in data.get("credits", {}).get("cast", [])[:8]:
-              profile_url = ""
-              if c.get("profile_path"):
-                  profile_url = "https://image.tmdb.org/t/p/w185" + c["profile_path"]
-              cast.append({
-                  "name": c.get("name", ""),
-                  "character": c.get("character", ""),
-                  "profile_url": profile_url,
-              })
-
+              profile_url = ("https://image.tmdb.org/t/p/w185" + c["profile_path"]) if c.get("profile_path") else ""
+              cast.append({"name": c.get("name", ""), "character": c.get("character", ""), "profile_url": profile_url})
           genres = [g.get("name", "") for g in data.get("genres", []) if g.get("name")]
-
-          return {
-              "name": data.get("title") or data.get("name") or title,
-              "overview": data.get("overview", ""),
-              "tagline": data.get("tagline", ""),
-              "poster_url": poster_url,
-              "backdrop_url": backdrop_url,
-              "genres": genres,
-              "release_date": data.get("release_date") or data.get("first_air_date") or "",
-              "language": data.get("original_language", ""),
-              "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0],
-              "tmdb_rating": data.get("vote_average"),
-              "tmdb_votes": data.get("vote_count"),
-              "status": data.get("status", ""),
-              "cast": cast,
-              "trailer_url": trailer_url,
-          }
+          return {"name": data.get("title") or data.get("name") or title, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url}
       except Exception:
           return {}
 
 
+  # ─────────────────────────────────────────────
+  #  DISPLAY HELPERS
+  # ─────────────────────────────────────────────
 DETAIL_CSS = """
 <style>
-.detail-shell {
-    position: relative;
-    border: 1px solid rgba(148,163,184,0.16);
-    border-radius: 24px;
-    overflow: hidden;
-    background: linear-gradient(180deg, rgba(3,7,18,0.98) 0%, rgba(8,12,20,0.98) 100%);
-    box-shadow: 0 20px 50px rgba(0,0,0,0.30);
-    margin-bottom: 18px;
-}
-.detail-hero {
-    position: relative;
-    min-height: 460px;
-}
-.detail-backdrop {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    filter: saturate(1.05);
-    opacity: 0.42;
-}
-.detail-backdrop::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(180deg, rgba(6,10,17,0.10) 0%, rgba(6,10,17,0.76) 66%, rgba(6,10,17,0.96) 100%),
-      linear-gradient(90deg, rgba(6,10,17,0.92) 0%, rgba(6,10,17,0.55) 38%, rgba(6,10,17,0.82) 100%);
-}
-.detail-content {
-    position: relative;
-    z-index: 2;
-    padding: 34px 34px 28px 34px;
-}
-.detail-poster {
-    width: 210px;
-    border-radius: 18px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-    box-shadow: 0 18px 40px rgba(0,0,0,0.42);
-}
-.detail-poster img {
-    width: 100%;
-    display: block;
-}
-.detail-kicker {
-    color: #cbd5e1;
-    font-size: 0.88rem;
-    margin-bottom: 8px;
-    letter-spacing: 0.02em;
-}
-.detail-title {
-    color: #f8fafc;
-    font-size: 2.35rem;
-    line-height: 1.08;
-    font-weight: 850;
-    margin-bottom: 10px;
-}
-.detail-tagline {
-    color: #c084fc;
-    font-size: 0.98rem;
-    margin-bottom: 14px;
-    font-style: italic;
-}
-.detail-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-.detail-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: #e5e7eb;
-    font-size: 0.78rem;
-    font-weight: 650;
-}
-.detail-overview {
-    color: #dbe4ee;
-    font-size: 1rem;
-    line-height: 1.72;
-    max-width: 880px;
-}
-.detail-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 18px;
-}
-.detail-panel {
-    border: 1px solid rgba(148,163,184,0.12);
-    border-radius: 18px;
-    padding: 18px;
-    background: linear-gradient(180deg, rgba(17,24,39,0.58) 0%, rgba(10,14,23,0.66) 100%);
-    backdrop-filter: blur(10px);
-    height: 100%;
-}
-.detail-panel h4 {
-    color: #f8fafc;
-    margin: 0 0 12px 0;
-    font-size: 1.06rem;
-    font-weight: 800;
-}
-.detail-fact-label {
-    color: #94a3b8;
-    font-size: 0.73rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-top: 6px;
-}
-.detail-fact-value {
-    color: #f8fafc;
-    font-size: 0.95rem;
-    margin-top: 2px;
-    margin-bottom: 10px;
-}
-.cast-wrap {
-    margin-top: 18px;
-}
-.cast-card {
-    border: 1px solid rgba(148,163,184,0.10);
-    border-radius: 16px;
-    padding: 10px;
-    background: rgba(255,255,255,0.03);
-    height: 100%;
-}
-.cast-avatar {
-    width: 100%;
-    aspect-ratio: 0.78;
-    object-fit: cover;
-    border-radius: 12px;
-    border: 1px solid rgba(148,163,184,0.10);
-    background: #1f2937;
-}
-.cast-placeholder {
-    width: 100%;
-    aspect-ratio: 0.78;
-    border-radius: 12px;
-    border: 1px solid rgba(148,163,184,0.10);
-    background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #94a3b8;
-    font-size: 0.82rem;
-}
-.cast-name {
-    margin-top: 10px;
-    color: #f8fafc;
-    font-size: 0.84rem;
-    font-weight: 750;
-    line-height: 1.25;
-}
-.cast-role {
-    margin-top: 4px;
-    color: #94a3b8;
-    font-size: 0.73rem;
-    line-height: 1.25;
-}
+.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-card{border:1px solid rgba(148,163,184,.10);border-radius:16px;padding:10px;background:rgba(255,255,255,.03);height:100%}.cast-avatar{width:100%;aspect-ratio:.78;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.cast-placeholder{width:100%;aspect-ratio:.78;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.82rem}.cast-name{margin-top:10px;color:#f8fafc;font-size:.84rem;font-weight:750;line-height:1.25}.cast-role{margin-top:4px;color:#94a3b8;font-size:.73rem;line-height:1.25}
 </style>
 """
-
 
 def render_entry_detail(entry_row, vote_summary):
       st.markdown(DETAIL_CSS, unsafe_allow_html=True)
       st.markdown('<div id="detail-top"></div>', unsafe_allow_html=True)
-      st.markdown("""
-      <script>
-      (function() {
-        const root = window.parent || window;
-        try { root.scrollTo({top: 0, behavior: 'auto'}); } catch (e) {}
-        setTimeout(function(){
-          try { root.scrollTo({top: 0, behavior: 'auto'}); } catch (e) {}
-          const el = document.getElementById('detail-top');
-          if (el) { try { el.scrollIntoView({behavior:'auto', block:'start'}); } catch (e) {} }
-        }, 40);
-      })();
-      </script>
-      """, unsafe_allow_html=True)
-
+      st.markdown("""<script>(function(){const root=window.parent||window;const reset=function(){try{root.scrollTo(0,0);}catch(e){}try{const containers=root.document.querySelectorAll('section.main,[data-testid="stAppViewContainer"]');containers.forEach(el=>{try{el.scrollTop=0;}catch(e){}});}catch(e){}try{const top=document.getElementById('detail-top');if(top)top.scrollIntoView({behavior:'auto',block:'start'});}catch(e){}};reset();setTimeout(reset,60);setTimeout(reset,180);})();</script>""", unsafe_allow_html=True)
       raw_entry_id = entry_row.get("entry_id", 0)
       try:
           _eid_s = _normalize_entry_id(raw_entry_id)
           entry_id = int(_eid_s) if _eid_s not in ("", "nan", "None") else 0
       except (ValueError, TypeError):
           entry_id = 0
-
       title = str(entry_row.get("title", "") or "").strip()
-      media_type = str(entry_row.get("type", "Movie") or "Movie").strip()
+      media_type = str(entry_row.get("type", "Movie") or "Movie").strip().title()
       tmdb = tmdb_fetch_details(title, media_type)
-
       poster_url = tmdb.get("poster_url") or (entry_row.get("poster_url", "") or "")
       backdrop_url = tmdb.get("backdrop_url", "")
       overview = tmdb.get("overview") or str(entry_row.get("comments", "") or "").strip()
@@ -402,146 +172,60 @@ def render_entry_detail(entry_row, vote_summary):
       genres = tmdb.get("genres") or [g.strip() for g in str(entry_row.get("genre", "") or "").split(",") if g.strip()]
       counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
       community_html = community_bar(counts["yes"], counts["no"])
-
-      bar_l, bar_r = st.columns([1.1, 8.9])
+      bar_l, _ = st.columns([1.1, 8.9])
       with bar_l:
           if st.button("← Back", key=f"detail_back_{entry_id}", use_container_width=True):
               st.session_state.pop("selected_entry_id", None)
+              st.session_state.pop("selected_entry_title", None)
+              st.session_state.pop("selected_entry_type", None)
               st.rerun()
-
-      hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ""
-
       title_html = html.escape(tmdb.get("name") or title or "Untitled")
       type_html = html.escape(media_type or "—")
-      platform_html = platform_badge(entry_row.get("platform", ""))
       platform_chip_html = _platform_chip_html(entry_row.get("platform", ""))
       status_html = status_badge(entry_row.get("status", ""))
       recommend_html = recommend_badge(entry_row.get("recommend", ""))
-      rating_html = rating_stars(entry_row.get("rating"))
       genre_html = "".join(f'<span class="detail-chip">{html.escape(g)}</span>' for g in genres[:6])
       user_rating = tmdb.get("tmdb_rating")
       tmdb_rating_chip = f'<span class="detail-chip">TMDB {round(user_rating, 1)}/10</span>' if user_rating is not None else ""
       runtime = tmdb.get("runtime")
       runtime_chip = f'<span class="detail-chip">{html.escape(str(runtime))} min</span>' if runtime else ""
-
       meta_html = f'<div class="detail-meta">{platform_chip_html}{tmdb_rating_chip}{runtime_chip}{status_html}{recommend_html}</div>'
-
-      hero_html = f"""
-      <div class="detail-shell">
-        <div class="detail-hero">
-          <div class="detail-backdrop" style='{hero_bg_style}'></div>
-          <div class="detail-content">
-            <div style="display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap;min-height:398px;">
-              <div class="detail-poster">
-                {"<img src='" + html.escape(poster_url) + "' alt='poster' loading='lazy'>" if poster_url else "<div style='height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;'>No Poster</div>"}
-              </div>
-              <div style="flex:1;min-width:300px;">
-                <div class="detail-kicker">{type_html}{f' • {html.escape(release_year)}' if release_year else ''}</div>
-                <div class="detail-title">{title_html}</div>
-                {f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''}
-                {meta_html}
-                <div style="margin-bottom:14px;">{genre_html}</div>
-                <div class="detail-overview">{html.escape(overview) if overview else 'No overview available yet.'}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      """
+      poster_markup = f'<img src="{html.escape(poster_url)}" alt="poster" loading="lazy">' if poster_url else '<div style="height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;">No Poster</div>'
+      tag_html = f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''
+      year_html = f' • {html.escape(release_year)}' if release_year else ''
+      hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ''
+      hero_html = f'<div class="detail-shell"><div class="detail-hero"><div class="detail-backdrop" style="{hero_bg_style}"></div><div class="detail-content"><div style="display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap;min-height:398px;"><div class="detail-poster">{poster_markup}</div><div style="flex:1;min-width:300px;"><div class="detail-kicker">{type_html}{year_html}</div><div class="detail-title">{title_html}</div>{tag_html}{meta_html}<div style="margin-bottom:14px;">{genre_html}</div><div class="detail-overview">{html.escape(overview) if overview else "No overview available yet."}</div></div></div></div></div></div>'
       st.markdown(hero_html, unsafe_allow_html=True)
-
       left_col, right_col = st.columns([2.2, 1])
-
       with left_col:
-          st.markdown(
-              f"""
-              <div class="detail-panel">
-                <h4>Overview</h4>
-                <div style="color:#dbe4ee;line-height:1.75;font-size:0.97rem;">{html.escape(overview) if overview else 'No overview available yet.'}</div>
-                <div class="detail-actions"></div>
-              </div>
-              """,
-              unsafe_allow_html=True,
-          )
-
+          st.markdown(f'<div class="detail-panel"><h4>Overview</h4><div style="color:#dbe4ee;line-height:1.75;font-size:0.97rem;white-space:pre-wrap;">{html.escape(overview) if overview else "No overview available yet."}</div></div>', unsafe_allow_html=True)
           st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-
           comments_text = str(entry_row.get("comments", "") or "").strip()
           watched_with = str(entry_row.get("watched_with", "") or "").strip()
           added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
-
-          community_panel = f"""
-          <div class="detail-panel">
-            <h4>Community</h4>
-            <div style="margin-bottom:14px;">{community_html}</div>
-            <div class="detail-fact-label">Your rating</div>
-            <div class="detail-fact-value">{html.escape(str(entry_row.get('rating', '—') or '—'))} / 10</div>
-            <div class="detail-fact-label">Added by</div>
-            <div class="detail-fact-value">{html.escape(added_by)}</div>
-            {f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''}
-            <div class="detail-fact-label">Review</div>
-            <div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{html.escape(comments_text) if comments_text else 'No review added yet.'}</div>
-          </div>
-          """
+          watched_with_html = f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''
+          community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{html.escape(comments_text) if comments_text else "No review added yet."}</div></div>'
           st.markdown(community_panel, unsafe_allow_html=True)
-
       with right_col:
-          tmdb_lang = (tmdb.get("language") or entry_row.get("language", "") or "").strip()
+          tmdb_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip()
           tmdb_votes = tmdb.get("tmdb_votes")
-          st.markdown(
-              f"""
-              <div class="detail-panel">
-                <h4>Facts</h4>
-                <div class="detail-fact-label">Platform</div>
-                <div class="detail-fact-value">{html.escape(str(entry_row.get('platform', '') or '—'))}</div>
-
-                <div class="detail-fact-label">Type</div>
-                <div class="detail-fact-value">{type_html}</div>
-
-                <div class="detail-fact-label">Language</div>
-                <div class="detail-fact-value">{html.escape(tmdb_lang or '—')}</div>
-
-                <div class="detail-fact-label">Release / Year</div>
-                <div class="detail-fact-value">{html.escape(release_date or str(entry_row.get('watched_year', '') or '—'))}</div>
-
-                <div class="detail-fact-label">Runtime</div>
-                <div class="detail-fact-value">{html.escape(str(runtime)) + ' min' if runtime else '—'}</div>
-
-                <div class="detail-fact-label">TMDB Rating</div>
-                <div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else '—'}</div>
-
-                <div class="detail-fact-label">TMDB Votes</div>
-                <div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else '—'}</div>
-              </div>
-              """,
-              unsafe_allow_html=True,
-          )
-
+          facts_html = f'<div class="detail-panel"><h4>Facts</h4><div class="detail-fact-label">Platform</div><div class="detail-fact-value">{html.escape(str(entry_row.get("platform", "") or "—"))}</div><div class="detail-fact-label">Type</div><div class="detail-fact-value">{type_html}</div><div class="detail-fact-label">Language</div><div class="detail-fact-value">{html.escape(tmdb_lang or "—")}</div><div class="detail-fact-label">Release / Year</div><div class="detail-fact-value">{html.escape(release_date or str(entry_row.get("watched_year", "") or "—"))}</div><div class="detail-fact-label">Runtime</div><div class="detail-fact-value">{html.escape(str(runtime)) + " min" if runtime else "—"}</div><div class="detail-fact-label">TMDB Rating</div><div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else "—"}</div><div class="detail-fact-label">TMDB Votes</div><div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else "—"}</div></div>'
+          st.markdown(facts_html, unsafe_allow_html=True)
           if tmdb.get("trailer_url"):
               st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
-
       cast = tmdb.get("cast", [])
       if cast:
           st.markdown("### Cast")
-          cast_cols = st.columns(4)
+          cast_cols = st.columns(2)
           for i, person in enumerate(cast[:8]):
-              with cast_cols[i % 4]:
+              with cast_cols[i % 2]:
                   img = person.get("profile_url", "")
                   name = html.escape(person.get("name", "") or "Unknown")
                   role = html.escape(person.get("character", "") or "")
-                  cast_html = f"""
-                  <div class="cast-card">
-                    {f"<img class='cast-avatar' src='{html.escape(img)}' alt='cast' loading='lazy'>" if img else "<div class='cast-placeholder'>No Image</div>"}
-                    <div class="cast-name">{name}</div>
-                    <div class="cast-role">{role}</div>
-                  </div>
-                  """
-                  st.markdown(cast_html, unsafe_allow_html=True)
+                  img_html = f'<img class="cast-avatar" src="{html.escape(img)}" alt="cast" loading="lazy">' if img else '<div class="cast-placeholder">No Image</div>'
+                  st.markdown(f'<div class="cast-card">{img_html}<div class="cast-name">{name}</div><div class="cast-role">{role}</div></div>', unsafe_allow_html=True)
 
 
-  # ─────────────────────────────────────────────
-  #  DISPLAY HELPERS
-  # ─────────────────────────────────────────────
 def platform_badge(platform: str) -> str:
       # FIX #6: escape user-supplied values
       p = html.escape((platform or "").strip())
@@ -611,6 +295,47 @@ def community_bar(yes_count: int, no_count: int) -> str:
       <div style="width:{pct_no}%;background:#4b5563;"></div>
     </div>
   </div>"""
+
+
+def _normalize_entry_id(value) -> str:
+      s = str(value).strip()
+      if s.endswith('.0'):
+          s = s[:-2]
+      return s
+
+
+def _platform_chip_html(platform: str) -> str:
+      p = (platform or '').strip()
+      normalized = {"Disney+ Hotstar": "Jio Hotstar", "SonyLiv": "Sony LIV", "ZEE5": "Zee5", "Zee5": "Zee5"}
+      lookup = normalized.get(p, p)
+      logo = PLATFORM_LOGOS.get(lookup, '')
+      label = html.escape(p or '—')
+      if logo:
+          return f'<span class="detail-chip"><img src="{html.escape(logo)}" width="14" height="14" style="vertical-align:middle;margin-right:4px;border-radius:2px;"><span style="color:inherit;">{label}</span></span>'
+      return f'<span class="detail-chip">{label}</span>'
+
+
+def _pick_tmdb_result(results: list, title: str, year_hint=None) -> dict:
+      if not results:
+          return {}
+      wanted = str(title or '').strip().lower()
+      yh = str(year_hint or '').strip()
+      def score(item):
+          name = str(item.get('title') or item.get('name') or '').strip().lower()
+          s = 0
+          if wanted and name == wanted:
+              s += 100
+          elif wanted and name.startswith(wanted):
+              s += 40
+          elif wanted and wanted in name:
+              s += 20
+          date_val = item.get('release_date') or item.get('first_air_date') or ''
+          iy = str(date_val)[:4] if date_val else ''
+          if yh and iy and yh == iy:
+              s += 30
+          s += min(float(item.get('vote_count') or 0) / 1000.0, 10)
+          return s
+      return sorted(results, key=score, reverse=True)[0]
 
 
   # ─────────────────────────────────────────────
@@ -1072,21 +797,26 @@ def page_browse(entries_ws, votes_ws):
 
       selected_entry_id = st.session_state.get("selected_entry_id")
       if selected_entry_id is not None:
-          # Strip trailing .0 from sheet-returned floats WITHOUT going through float()
-          # (float() loses precision on 17-digit IDs > 2^53)
           sel_str = _normalize_entry_id(selected_entry_id)
           df_copy = df.copy()
           df_copy["_eid_str"] = df_copy["entry_id"].apply(_normalize_entry_id)
           selected_df = df_copy[df_copy["_eid_str"] == sel_str].drop(columns=["_eid_str"])
+          if selected_df.empty:
+              sel_title = str(st.session_state.get("selected_entry_title", "") or "").strip().lower()
+              sel_type = str(st.session_state.get("selected_entry_type", "") or "").strip().lower()
+              if sel_title:
+                  title_mask = df["title"].astype(str).str.strip().str.lower() == sel_title
+                  if sel_type and "type" in df.columns:
+                      type_mask = df["type"].astype(str).str.strip().str.lower() == sel_type
+                      selected_df = df[title_mask & type_mask]
+                  else:
+                      selected_df = df[title_mask]
           if not selected_df.empty:
-              try:
-                  render_entry_detail(selected_df.iloc[0], vote_summary)
-              except Exception as _det_err:
-                  st.error(f"Error rendering detail view: {_det_err}")
-                  st.session_state.pop("selected_entry_id", None)
-                  st.rerun()
+              render_entry_detail(selected_df.iloc[0], vote_summary)
               return
           st.session_state.pop("selected_entry_id", None)
+          st.session_state.pop("selected_entry_title", None)
+          st.session_state.pop("selected_entry_type", None)
 
       if df.empty:
           st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
@@ -1154,6 +884,12 @@ def page_browse(entries_ws, votes_ws):
                           f"{rating_stars(pr.get('rating'))}",
                           unsafe_allow_html=True,
                       )
+                      pick_eid = _normalize_entry_id(pr.get("entry_id", ""))
+                      if st.button("View Details", key=f"tonight_view_{pick_eid}_{i}", use_container_width=True):
+                          st.session_state["selected_entry_id"] = pick_eid
+                          st.session_state["selected_entry_title"] = str(pr.get("title", "") or "").strip()
+                          st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
+                          st.rerun()
               st.divider()
 
       # ── Sidebar filters ───────────────────────────────────────────
@@ -1434,7 +1170,10 @@ CARD_CSS = """<style>
 
 
 def _inject_card_css():
-      st.markdown(CARD_CSS, unsafe_allow_html=True)
+      # FIX #3: use session_state instead of fragile module-level global
+      if not st.session_state.get("_card_css_injected"):
+          st.markdown(CARD_CSS, unsafe_allow_html=True)
+          st.session_state["_card_css_injected"] = True
 
 
 def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render_scope="main"):
@@ -1449,14 +1188,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
       for idx, (_, row) in enumerate(filtered.iterrows()):
           raw_entry_id = row.get("entry_id", 0)
           try:
-              # Avoid float() conversion — it loses precision on 17-digit IDs (> 2^53)
-              _eid_s = str(raw_entry_id).strip()
-              if _eid_s in ("", "nan", "None"):
-                  entry_id = idx + 1
-              elif _eid_s.endswith(".0"):
-                  entry_id = int(_eid_s[:-2])
-              else:
-                  entry_id = int(_eid_s)
+              entry_id = int(_normalize_entry_id(raw_entry_id)) if _normalize_entry_id(raw_entry_id) not in ("", "nan", "None") else idx + 1
           except (ValueError, TypeError):
               entry_id = idx + 1
           title_txt      = row.get("title",    "—")
@@ -1794,9 +1526,6 @@ def main():
           st.error("Failed to connect to Google Sheets. Please check your credentials and try again.")
           st.exception(e)
           return
-
-      if "selected_entry_id" not in st.session_state:
-          st.session_state["selected_entry_id"] = None
 
       page, current_name = render_sidebar()
 
