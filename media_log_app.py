@@ -30,7 +30,7 @@ PLATFORM_LOGOS = {
       "":                "",
   }
 
-PLATFORMS = ["", "Netflix", "Prime Video", "Jio Hotstar", "Sony LIV", "Zee5", "YouTube", "Other"]
+PLATFORMS = ["", "Netflix", "Prime Video", "Jio Hotstar", "SonyLiv", "Zee5", "YouTube", "Other"]
 
 GENRES_LIST = [
       "Action", "Adventure", "Animation", "Comedy", "Crime",
@@ -102,6 +102,431 @@ def tmdb_search(title: str, media_type: str) -> list:
           return out
       except Exception:
           return []
+
+
+@st.cache_data(ttl=3600)
+def tmdb_fetch_details(title: str, media_type: str) -> dict:
+      """Fetch rich TMDB details for a single title. Cached for 1 hour."""
+      key = st.secrets.get("tmdb_api_key", "")
+      if not key or not title.strip():
+          return {}
+
+      t = "tv" if media_type == "WebSeries" else "movie"
+
+      try:
+          sr = requests.get(
+              f"{TMDB_BASE}/search/{t}",
+              params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
+              timeout=6,
+          )
+          sr.raise_for_status()
+          results = sr.json().get("results", [])
+          if not results:
+              return {}
+
+          best = results[0]
+          tmdb_id = best.get("id")
+          if not tmdb_id:
+              return {}
+
+          dr = requests.get(
+              f"{TMDB_BASE}/{t}/{tmdb_id}",
+              params={
+                  "api_key": key,
+                  "language": "en-US",
+                  "append_to_response": "credits,videos"
+              },
+              timeout=8,
+          )
+          dr.raise_for_status()
+          data = dr.json()
+
+          poster_url = ""
+          backdrop_url = ""
+
+          if data.get("poster_path"):
+              poster_url = "https://image.tmdb.org/t/p/w342" + data["poster_path"]
+          elif best.get("poster_path"):
+              poster_url = "https://image.tmdb.org/t/p/w342" + best["poster_path"]
+
+          if data.get("backdrop_path"):
+              backdrop_url = "https://image.tmdb.org/t/p/w1280" + data["backdrop_path"]
+          elif best.get("backdrop_path"):
+              backdrop_url = "https://image.tmdb.org/t/p/w1280" + best["backdrop_path"]
+
+          videos = data.get("videos", {}).get("results", [])
+          trailer_url = ""
+          for v in videos:
+              if v.get("site") == "YouTube" and v.get("key") and v.get("type") in ("Trailer", "Teaser"):
+                  trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
+                  break
+
+          cast = []
+          for c in data.get("credits", {}).get("cast", [])[:8]:
+              profile_url = ""
+              if c.get("profile_path"):
+                  profile_url = "https://image.tmdb.org/t/p/w185" + c["profile_path"]
+              cast.append({
+                  "name": c.get("name", ""),
+                  "character": c.get("character", ""),
+                  "profile_url": profile_url,
+              })
+
+          genres = [g.get("name", "") for g in data.get("genres", []) if g.get("name")]
+
+          return {
+              "name": data.get("title") or data.get("name") or title,
+              "overview": data.get("overview", ""),
+              "tagline": data.get("tagline", ""),
+              "poster_url": poster_url,
+              "backdrop_url": backdrop_url,
+              "genres": genres,
+              "release_date": data.get("release_date") or data.get("first_air_date") or "",
+              "language": data.get("original_language", ""),
+              "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0],
+              "tmdb_rating": data.get("vote_average"),
+              "tmdb_votes": data.get("vote_count"),
+              "status": data.get("status", ""),
+              "cast": cast,
+              "trailer_url": trailer_url,
+          }
+      except Exception:
+          return {}
+
+
+DETAIL_CSS = """
+<style>
+.detail-shell {
+    position: relative;
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 24px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(3,7,18,0.98) 0%, rgba(8,12,20,0.98) 100%);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.30);
+    margin-bottom: 18px;
+}
+.detail-hero {
+    position: relative;
+    min-height: 460px;
+}
+.detail-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: saturate(1.05);
+    opacity: 0.42;
+}
+.detail-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(6,10,17,0.10) 0%, rgba(6,10,17,0.76) 66%, rgba(6,10,17,0.96) 100%),
+      linear-gradient(90deg, rgba(6,10,17,0.92) 0%, rgba(6,10,17,0.55) 38%, rgba(6,10,17,0.82) 100%);
+}
+.detail-content {
+    position: relative;
+    z-index: 2;
+    padding: 34px 34px 28px 34px;
+}
+.detail-poster {
+    width: 210px;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.42);
+}
+.detail-poster img {
+    width: 100%;
+    display: block;
+}
+.detail-kicker {
+    color: #cbd5e1;
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+.detail-title {
+    color: #f8fafc;
+    font-size: 2.35rem;
+    line-height: 1.08;
+    font-weight: 850;
+    margin-bottom: 10px;
+}
+.detail-tagline {
+    color: #c084fc;
+    font-size: 0.98rem;
+    margin-bottom: 14px;
+    font-style: italic;
+}
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.detail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #e5e7eb;
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+.detail-overview {
+    color: #dbe4ee;
+    font-size: 1rem;
+    line-height: 1.72;
+    max-width: 880px;
+}
+.detail-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+.detail-panel {
+    border: 1px solid rgba(148,163,184,0.12);
+    border-radius: 18px;
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(17,24,39,0.58) 0%, rgba(10,14,23,0.66) 100%);
+    backdrop-filter: blur(10px);
+    height: 100%;
+}
+.detail-panel h4 {
+    color: #f8fafc;
+    margin: 0 0 12px 0;
+    font-size: 1.06rem;
+    font-weight: 800;
+}
+.detail-fact-label {
+    color: #94a3b8;
+    font-size: 0.73rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+}
+.detail-fact-value {
+    color: #f8fafc;
+    font-size: 0.95rem;
+    margin-top: 2px;
+    margin-bottom: 10px;
+}
+.cast-wrap {
+    margin-top: 18px;
+}
+.cast-card {
+    border: 1px solid rgba(148,163,184,0.10);
+    border-radius: 16px;
+    padding: 10px;
+    background: rgba(255,255,255,0.03);
+    height: 100%;
+}
+.cast-avatar {
+    width: 100%;
+    aspect-ratio: 0.78;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid rgba(148,163,184,0.10);
+    background: #1f2937;
+}
+.cast-placeholder {
+    width: 100%;
+    aspect-ratio: 0.78;
+    border-radius: 12px;
+    border: 1px solid rgba(148,163,184,0.10);
+    background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 0.82rem;
+}
+.cast-name {
+    margin-top: 10px;
+    color: #f8fafc;
+    font-size: 0.84rem;
+    font-weight: 750;
+    line-height: 1.25;
+}
+.cast-role {
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 0.73rem;
+    line-height: 1.25;
+}
+</style>
+"""
+
+
+def render_entry_detail(entry_row, vote_summary):
+      st.markdown(DETAIL_CSS, unsafe_allow_html=True)
+
+      raw_entry_id = entry_row.get("entry_id", 0)
+      try:
+          entry_id = int(float(raw_entry_id))
+      except (ValueError, TypeError):
+          entry_id = 0
+
+      title = str(entry_row.get("title", "") or "").strip()
+      media_type = str(entry_row.get("type", "Movie") or "Movie").strip()
+      tmdb = tmdb_fetch_details(title, media_type)
+
+      poster_url = tmdb.get("poster_url") or (entry_row.get("poster_url", "") or "")
+      backdrop_url = tmdb.get("backdrop_url", "")
+      overview = tmdb.get("overview") or str(entry_row.get("comments", "") or "").strip()
+      tagline = tmdb.get("tagline", "")
+      release_date = tmdb.get("release_date", "")
+      release_year = release_date[:4] if release_date else str(entry_row.get("watched_year", "") or "")
+      genres = tmdb.get("genres") or [g.strip() for g in str(entry_row.get("genre", "") or "").split(",") if g.strip()]
+      counts = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+      community_html = community_bar(counts["yes"], counts["no"])
+
+      bar_l, bar_r = st.columns([1.1, 8.9])
+      with bar_l:
+          if st.button("← Back", key=f"detail_back_{entry_id}", use_container_width=True):
+              st.session_state.pop("selected_entry_id", None)
+              st.rerun()
+
+      hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ""
+
+      title_html = html.escape(tmdb.get("name") or title or "Untitled")
+      type_html = html.escape(media_type or "—")
+      platform_html = platform_badge(entry_row.get("platform", ""))
+      status_html = status_badge(entry_row.get("status", ""))
+      recommend_html = recommend_badge(entry_row.get("recommend", ""))
+      rating_html = rating_stars(entry_row.get("rating"))
+      genre_html = "".join(f'<span class="detail-chip">{html.escape(g)}</span>' for g in genres[:6])
+      user_rating = tmdb.get("tmdb_rating")
+      tmdb_rating_chip = f'<span class="detail-chip">TMDB {round(user_rating, 1)}/10</span>' if user_rating is not None else ""
+      runtime = tmdb.get("runtime")
+      runtime_chip = f'<span class="detail-chip">{html.escape(str(runtime))} min</span>' if runtime else ""
+
+      hero_html = f"""
+      <div class="detail-shell">
+        <div class="detail-hero">
+          <div class="detail-backdrop" style='{hero_bg_style}'></div>
+          <div class="detail-content">
+            <div style="display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap;min-height:398px;">
+              <div class="detail-poster">
+                {"<img src='" + html.escape(poster_url) + "' alt='poster' loading='lazy'>" if poster_url else "<div style='height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;'>No Poster</div>"}
+              </div>
+              <div style="flex:1;min-width:300px;">
+                <div class="detail-kicker">{type_html}{f' • {html.escape(release_year)}' if release_year else ''}</div>
+                <div class="detail-title">{title_html}</div>
+                {f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''}
+                <div class="detail-meta">
+                  <span class="detail-chip">{platform_html}</span>
+                  {tmdb_rating_chip}
+                  {runtime_chip}
+                  {status_html}
+                  {recommend_html}
+                </div>
+                <div style="margin-bottom:14px;">{genre_html}</div>
+                <div class="detail-overview">{html.escape(overview) if overview else 'No overview available yet.'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      """
+      st.markdown(hero_html, unsafe_allow_html=True)
+
+      left_col, right_col = st.columns([2.2, 1])
+
+      with left_col:
+          st.markdown(
+              f"""
+              <div class="detail-panel">
+                <h4>Overview</h4>
+                <div style="color:#dbe4ee;line-height:1.75;font-size:0.97rem;">{html.escape(overview) if overview else 'No overview available yet.'}</div>
+                <div class="detail-actions"></div>
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
+
+          st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
+          comments_text = str(entry_row.get("comments", "") or "").strip()
+          watched_with = str(entry_row.get("watched_with", "") or "").strip()
+          added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
+
+          st.markdown(
+              f"""
+              <div class="detail-panel">
+                <h4>Community</h4>
+                <div style="margin-bottom:14px;">{community_html}</div>
+                <div class="detail-fact-label">Your rating</div>
+                <div class="detail-fact-value">{html.escape(str(entry_row.get('rating', '—') or '—'))} / 10</div>
+                <div class="detail-fact-label">Added by</div>
+                <div class="detail-fact-value">{html.escape(added_by)}</div>
+                {f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''}
+                <div class="detail-fact-label">Review</div>
+                <div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;">{html.escape(comments_text) if comments_text else 'No review added yet.'}</div>
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
+
+      with right_col:
+          tmdb_lang = (tmdb.get("language") or entry_row.get("language", "") or "").strip()
+          tmdb_votes = tmdb.get("tmdb_votes")
+          st.markdown(
+              f"""
+              <div class="detail-panel">
+                <h4>Facts</h4>
+                <div class="detail-fact-label">Platform</div>
+                <div class="detail-fact-value">{html.escape(str(entry_row.get('platform', '') or '—'))}</div>
+
+                <div class="detail-fact-label">Type</div>
+                <div class="detail-fact-value">{type_html}</div>
+
+                <div class="detail-fact-label">Language</div>
+                <div class="detail-fact-value">{html.escape(tmdb_lang or '—')}</div>
+
+                <div class="detail-fact-label">Release / Year</div>
+                <div class="detail-fact-value">{html.escape(release_date or str(entry_row.get('watched_year', '') or '—'))}</div>
+
+                <div class="detail-fact-label">Runtime</div>
+                <div class="detail-fact-value">{html.escape(str(runtime)) + ' min' if runtime else '—'}</div>
+
+                <div class="detail-fact-label">TMDB Rating</div>
+                <div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else '—'}</div>
+
+                <div class="detail-fact-label">TMDB Votes</div>
+                <div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else '—'}</div>
+              </div>
+              """,
+              unsafe_allow_html=True,
+          )
+
+          if tmdb.get("trailer_url"):
+              st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
+
+      cast = tmdb.get("cast", [])
+      if cast:
+          st.markdown("### Cast")
+          cast_cols = st.columns(4)
+          for i, person in enumerate(cast[:8]):
+              with cast_cols[i % 4]:
+                  img = person.get("profile_url", "")
+                  name = html.escape(person.get("name", "") or "Unknown")
+                  role = html.escape(person.get("character", "") or "")
+                  cast_html = f"""
+                  <div class="cast-card">
+                    {f"<img class='cast-avatar' src='{html.escape(img)}' alt='cast' loading='lazy'>" if img else "<div class='cast-placeholder'>No Image</div>"}
+                    <div class="cast-name">{name}</div>
+                    <div class="cast-role">{role}</div>
+                  </div>
+                  """
+                  st.markdown(cast_html, unsafe_allow_html=True)
 
 
   # ─────────────────────────────────────────────
@@ -284,7 +709,6 @@ def cast_vote(votes_ws, entry_id: int, voter_name: str, vote: str):
           [entry_id, voter_name.strip(), vote],
           value_input_option="USER_ENTERED",
       )
-      read_votes.clear()
 
 
 def append_row(ws, row_dict: dict):
@@ -307,13 +731,10 @@ def delete_row(ws, row_index: int):
 
 
 def find_row_index(ws, entry_id) -> int:
-      """Find the 1-indexed row number for a given entry_id.
-      Returns 0 if not found or if match is the header row (row 1)."""
+      """Find the 1-indexed row number for a given entry_id. Returns 0 if not found."""
       try:
           cell = ws.find(str(entry_id), in_column=1)
-          if cell is None or cell.row <= 1:
-              return 0
-          return cell.row
+          return cell.row if cell else 0
       except Exception:
           return 0
 
@@ -639,6 +1060,14 @@ def page_browse(entries_ws, votes_ws):
       votes_df     = read_votes(votes_ws)
       vote_summary = build_vote_summary(votes_df)
 
+      selected_entry_id = st.session_state.get("selected_entry_id")
+      if selected_entry_id is not None:
+          selected_df = df[df["entry_id"].astype(str) == str(selected_entry_id)]
+          if not selected_df.empty:
+              render_entry_detail(selected_df.iloc[0], vote_summary)
+              return
+          st.session_state.pop("selected_entry_id", None)
+
       if df.empty:
           st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
           return
@@ -683,9 +1112,8 @@ def page_browse(entries_ws, votes_ws):
               (df["recommend"].str.lower() == "yes") &
               (pd.to_numeric(df["rating"], errors="coerce") >= 8)
           ]
-          current_user = st.session_state.get("user_name", "").strip()
-          if current_user and "added_by" in top_pool.columns:
-              top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != current_user.lower()]
+          if voter_name and "added_by" in top_pool.columns:
+              top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
           if not top_pool.empty:
               st.markdown("### 🍿 Tonight's picks")
@@ -986,8 +1414,6 @@ CARD_CSS = """<style>
 
 
 def _inject_card_css():
-      # Always inject — Streamlit deduplicates identical markdown blocks automatically.
-      # Session-state guard was causing cards to render unstyled after hot-reloads.
       st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
@@ -1088,6 +1514,12 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
           card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
           st.markdown(card_html, unsafe_allow_html=True)
 
+          action_col, _ = st.columns([1.35, 8.65])
+          with action_col:
+              if st.button("View Details", key=f"view_{entry_id}_{idx}_{render_scope}", use_container_width=True):
+                  st.session_state["selected_entry_id"] = entry_id
+                  st.rerun()
+
           # Vote + Edit/Delete row
           _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws,
                               counts["yes"], counts["no"], idx, render_scope)
@@ -1170,33 +1602,37 @@ def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
               sub_col1, sub_col2 = st.columns(2)
               with sub_col1:
                   if st.form_submit_button("💾 Save changes", type="primary"):
-                      try:
-                          row_idx = find_row_index(entries_ws, entry_id)
-                          if row_idx:
-                              updated = {}
-                              for c in COLUMNS:
-                                  val = row.get(c, "")
-                                  if isinstance(val, pd.Timestamp):
-                                      val = val.isoformat(timespec="seconds") if pd.notna(val) else ""
-                                  elif val is None or (isinstance(val, float) and pd.isna(val)):
-                                      val = ""
-                                  elif hasattr(val, "item"):
-                                      val = val.item()
-                                  updated[c] = val
-                              updated["title"] = new_title.strip()
-                              updated["platform"] = new_platform
-                              updated["status"] = new_status
-                              updated["rating"] = new_rating
-                              updated["comments"] = new_comments.strip()
-                              update_row(entries_ws, row_idx, updated)
-                              read_entries.clear()
-                              st.session_state.pop(edit_key, None)
-                              st.success("Updated!")
-                              st.rerun()
-                          else:
-                              st.error("Could not find entry.")
-                      except Exception as e:
-                          st.error(f"Update failed: {e}")
+                    try:
+                        row_idx = find_row_index(entries_ws, entry_id)
+                        if row_idx:
+         				    # Build updated dict, properly converting pandas types
+                            updated = {}
+                            for c in COLUMNS:
+                                val = row.get(c, "")
+          					    # Convert pandas Timestamp to string
+                                if isinstance(val, pd.Timestamp):
+                                    val = val.isoformat(timespec="seconds") if pd.notna(val) else ""
+                                    # Convert NaN/None to empty string
+                                elif val is None or (isinstance(val, float) and pd.isna(val)):
+                                    val = ""
+                                    # Convert numpy int/float to Python native
+                                elif hasattr(val, "item"):
+                                    val = val.item()
+                                updated[c] = val
+                            updated["title"] = new_title.strip()
+                            updated["platform"] = new_platform
+                            updated["status"] = new_status
+                            updated["rating"] = new_rating
+                            updated["comments"] = new_comments.strip()
+                            update_row(entries_ws, row_idx, updated)
+                            read_entries.clear()
+                            st.session_state.pop(edit_key, None)
+                            st.success("Updated!")
+                            st.rerun()
+                        else:
+                            st.error("Could not find entry.")
+                    except Exception as e:
+                        st.error(f"Update failed: {e}")
               with sub_col2:
                   if st.form_submit_button("Cancel"):
                       st.session_state.pop(edit_key, None)
@@ -1329,6 +1765,9 @@ def main():
           st.error("Failed to connect to Google Sheets. Please check your credentials and try again.")
           st.exception(e)
           return
+
+      if "selected_entry_id" not in st.session_state:
+          st.session_state["selected_entry_id"] = None
 
       page, current_name = render_sidebar()
 
