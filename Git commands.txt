@@ -1,0 +1,4 @@
+git status
+git add media_log_app.py
+git commit -m "Fix media log defects and improve TMDB autofill"
+git push origin main
