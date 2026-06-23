@@ -181,7 +181,20 @@ def render_entry_detail(entry_row, vote_summary):
           st.session_state["my_collection"] = set()
       if "my_watched_list" not in st.session_state:
           st.session_state["my_watched_list"] = set()
-      _components.html("""<script>(function(){function go(){var w=window.parent||window;try{w.scrollTo({top:0,behavior:"instant"});}catch(e){w.scrollTo(0,0);}try{w.document.querySelector('[data-testid="stAppViewContainer"]').scrollTop=0;}catch(e){}}go();setTimeout(go,80);setTimeout(go,250);</script>""", height=1, scrolling=False)
+      _components.html("""
+        <script>
+        (function(){
+          function go(){
+            try{window.parent.scrollTo({top:0,behavior:"instant"});}catch(e){}
+            try{window.parent.document.documentElement.scrollTop=0;}catch(e){}
+            try{window.parent.document.body.scrollTop=0;}catch(e){}
+            try{var c=window.parent.document.querySelector('[data-testid="stAppViewContainer"]');if(c)c.scrollTop=0;}catch(e){}
+            try{var m=window.parent.document.querySelector('.main');if(m)m.scrollTop=0;}catch(e){}
+          }
+          go();setTimeout(go,80);setTimeout(go,250);setTimeout(go,500);
+        })();
+        </script>
+      """, height=1, scrolling=False)
       st.markdown(DETAIL_CSS, unsafe_allow_html=True)
       st.markdown('<div id="detail-top"></div>', unsafe_allow_html=True)
       raw_entry_id = entry_row.get("entry_id", 0)
@@ -248,12 +261,22 @@ def render_entry_detail(entry_row, vote_summary):
       if runtime:
           hero_meta_cols.append(f'<div class="hero-meta-col"><div class="hero-meta-label">Runtime</div><div class="hero-meta-value">{html.escape(_runtime_fmt)}</div></div>')
       hero_meta_row = f'<div class="hero-meta-grid">{"".join(hero_meta_cols)}</div>' if hero_meta_cols else ""
+      _platform_str = html.escape(str(entry_row.get("platform", "") or ""))
+      _platform_chip = f'<span class="detail-chip">▶&nbsp;{_platform_str}</span>' if _platform_str else ""
+      _trailer_href = tmdb.get("trailer_url", "") or ""
+      _trailer_btn  = (f'<a href="{_trailer_href}" target="_blank" '
+                       f'style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;'
+                       f'border-radius:999px;background:rgba(255,255,255,.10);color:#f1f5f9;'
+                       f'border:1px solid rgba(255,255,255,.18);text-decoration:none;font-size:.92rem;font-weight:600;'
+                       f'margin-top:6px;">▶ Watch Trailer</a>')\
+                       if _trailer_href else ""
       _watch_label = "✓ Watched" if _is_watched else "👁 Mark as Watched"
       _col_label   = "✓ In Collection" if _is_in_collection else "＋ Add to Collection"
       action_html = (
           f'<div class="hero-actions">'
           f'<button class="hero-action-btn hero-action-primary">{_watch_label}</button>'
           f'<button class="hero-action-btn hero-action-secondary">{_col_label}</button>'
+          f'{_trailer_btn}'
           f'</div>'
       )
       hero_html = (
@@ -266,8 +289,10 @@ def render_entry_detail(entry_row, vote_summary):
           f'<div class="detail-kicker">{type_html}{year_html}</div>'
           f'<div class="detail-title">{title_html}</div>'
           f'{tag_html}'
+          f'<div style="margin-bottom:6px;">{_platform_chip}</div>'
           f'<div style="margin-bottom:10px;">{genre_html}</div>'
           f'{hero_meta_row}'
+          f'<div class="detail-overview" style="margin-top:14px;max-width:520px;">{html.escape(overview) if overview else ""}</div>'
           f'</div>'
           f'<div style="display:flex;flex-direction:column;justify-content:flex-start;padding-top:8px;">{action_html}</div>'
           f'</div>'
@@ -294,19 +319,6 @@ def render_entry_detail(entry_row, vote_summary):
               with st.expander(f"📚 My Collection ({len(_my_coll)})", expanded=False):
                   st.write(", ".join(str(x) for x in _my_coll))
       with right_col:
-          _raw_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip().lower()
-          tmdb_lang = LANG_NAMES.get(_raw_lang, _raw_lang.upper() if len(_raw_lang) <= 3 else _raw_lang.capitalize())
-          tmdb_votes = tmdb.get("tmdb_votes")
-          next_ep = tmdb.get("next_episode_to_air") or {}
-          season_facts_html = ""
-          if media_type == "Webseries":
-              season_facts_html += f'<div class="detail-fact-label">Total Seasons</div><div class="detail-fact-value">{html.escape(str(tmdb.get("number_of_seasons") or "—"))}</div>'
-              season_facts_html += f'<div class="detail-fact-label">Total Episodes</div><div class="detail-fact-value">{html.escape(str(tmdb.get("number_of_episodes") or "—"))}</div>'
-              season_facts_html += f'<div class="detail-fact-label">Last Air Date</div><div class="detail-fact-value">{html.escape(str(tmdb.get("last_air_date") or "—"))}</div>'
-              next_ep_label = f"{next_ep.get('name','Episode')} (Ep {next_ep.get('episode_number')}) - {next_ep.get('air_date','—')}" if next_ep else "—"
-              season_facts_html += f'<div class="detail-fact-label">Next Episode</div><div class="detail-fact-value">{html.escape(next_ep_label)}</div>'
-          facts_html = f'<div class="detail-panel"><h4>Facts</h4><div class="detail-fact-label">Platform</div><div class="detail-fact-value">{html.escape(str(entry_row.get("platform", "") or "—"))}</div><div class="detail-fact-label">Type</div><div class="detail-fact-value">{type_html}</div><div class="detail-fact-label">Language</div><div class="detail-fact-value">{html.escape(tmdb_lang or "—")}</div><div class="detail-fact-label">Release / Year</div><div class="detail-fact-value">{html.escape(release_date or str(entry_row.get("watched_year", "") or "—"))}</div><div class="detail-fact-label">Runtime</div><div class="detail-fact-value">{html.escape(str(runtime)) + " min" if runtime else "—"}</div><div class="detail-fact-label">TMDB Rating</div><div class="detail-fact-value">{html.escape(str(round(user_rating, 1))) if user_rating is not None else "—"}</div><div class="detail-fact-label">TMDB Votes</div><div class="detail-fact-value">{html.escape(str(tmdb_votes)) if tmdb_votes is not None else "—"}</div>{season_facts_html}</div>'
-          st.markdown(facts_html, unsafe_allow_html=True)
           if tmdb.get("trailer_url"):
               st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
       st.markdown("---")
@@ -606,6 +618,17 @@ def find_row_index(ws, entry_id) -> int:
   # ─────────────────────────────────────────────
 def render_sidebar():
       """Render sidebar navigation + single name input. Returns (page, name)."""
+      st.sidebar.markdown(
+          '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 12px 0;">'
+          '<span style="font-size:1.7rem;">🎬</span>'
+          '<span style="font-size:1.15rem;font-weight:800;color:#f1f5f9;">MediaLog</span>'
+          '</div>',
+          unsafe_allow_html=True,
+      )
+      if st.sidebar.button("🏠 Home", use_container_width=True, key="logo_home_btn"):
+          for _k in ["selected_entry_id","selected_entry_title","selected_entry_type"]:
+              st.session_state.pop(_k, None)
+          st.rerun()
       page = st.sidebar.radio("Navigate", ["Browse", "Add Entry", "Reports"], index=0)
       st.sidebar.divider()
 
@@ -624,17 +647,6 @@ def render_sidebar():
           st.session_state["voter_name"]   = name
           st.session_state["sidebar_name"] = name
 
-      st.sidebar.divider()
-      st.sidebar.caption("Filters and sort options appear here when you're on the Browse page.")
-      st.sidebar.divider()
-      st.sidebar.markdown(
-          "**How it works**\n"
-          "- Log what you watch in **Add Entry**\n"
-          "- Browse & filter in **Browse**\n"
-          "- 👍/👎 vote on any entry\n"
-          "- See charts in **Reports**\n"
-          "- Share this URL with friends"
-      )
       return page, name
 
 
@@ -891,12 +903,11 @@ def render_stats_grid(stats):
 def render_back_to_top_button():
       st.markdown("""
       <style>
-      #btt-btn{position:fixed;right:18px;bottom:24px;z-index:9998;width:46px;height:46px;
-        border-radius:50%;border:none;background:#1e293b;color:#f1f5f9;font-size:1.25rem;
-        box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer;display:none;
-        align-items:center;justify-content:center;transition:opacity .2s,transform .2s}
-      #btt-btn.visible{display:flex}
-      #btt-btn:hover{background:#334155;transform:translateY(-2px)}
+      #btt-btn{position:fixed;right:22px;bottom:28px;z-index:9998;width:48px;height:48px;
+        border-radius:50%;border:none;background:#1e293b;color:#f1f5f9;font-size:1.3rem;
+        box-shadow:0 8px 24px rgba(0,0,0,.4);cursor:pointer;display:flex;
+        align-items:center;justify-content:center;transition:opacity .25s,transform .2s;opacity:0.85;}
+      #btt-btn:hover{background:#334155;transform:translateY(-3px);opacity:1!important}
       </style>
       <button id="btt-btn" onclick="(window.parent||window).scrollTo({top:0,behavior:'smooth'})" title="Back to top">↑</button>
       <script>
@@ -905,10 +916,11 @@ def render_back_to_top_button():
         function check(){
           var btn=document.getElementById('btt-btn');
           if(!btn)return;
-          var scrollY=win.scrollY||win.pageYOffset||0;
-          if(scrollY>300){btn.classList.add('visible');}else{btn.classList.remove('visible');}
+          var s=win.scrollY||win.pageYOffset||0;
+          btn.style.opacity = s>80 ? '1' : '0.35';
         }
         win.addEventListener('scroll',check,{passive:true});
+        setInterval(check,800);
         check();
       })();
       </script>
@@ -923,22 +935,7 @@ def page_browse(entries_ws, votes_ws):
       </style>
       """, unsafe_allow_html=True)
 
-      st.markdown('<div class="browse-toolbar">', unsafe_allow_html=True)
-      top_l, top_m = st.columns([1.4, 4.6])
-      with top_l:
-          if st.button("🔄 Refresh", use_container_width=True):
-              read_entries.clear()
-              read_votes.clear()
-              st.rerun()
-      with top_m:
-          search_text = st.text_input(
-              "Search titles",
-              value=st.session_state.get("browse_search", ""),
-              placeholder="Search movies or web series...",
-              key="browse_search_inline",
-          )
-          st.session_state["browse_search"] = search_text
-      st.markdown('</div>', unsafe_allow_html=True)
+      search_text = st.session_state.get("browse_search", "")
 
       df           = read_entries(entries_ws)
       votes_df     = read_votes(votes_ws)
@@ -1658,6 +1655,14 @@ def main():
           layout="wide",
       )
 
+      _gs = st.text_input(
+          "Search",
+          value=st.session_state.get("browse_search", ""),
+          placeholder="Search movies or web series...",
+          key="global_search_top",
+          label_visibility="collapsed",
+      )
+      st.session_state["browse_search"] = _gs
       st.title("🎬 What Am I Watching?")
       st.caption(
           "A shared log for movies & web series across all OTT platforms. "
@@ -1673,12 +1678,22 @@ def main():
 
       page, current_name = render_sidebar()
 
+      render_back_to_top_button()
       if page == "Add Entry":
           page_add_entry(entries_ws, current_name)
       elif page == "Reports":
           page_reports(entries_ws)
       else:
           page_browse(entries_ws, votes_ws)
+      st.sidebar.divider()
+      st.sidebar.markdown(
+          "**How it works**\n"
+          "- Log what you watch in **Add Entry**\n"
+          "- Browse & filter in **Browse**\n"
+          "- 👍/👎 vote on any entry\n"
+          "- See charts in **Reports**\n"
+          "- Share this URL with friends"
+      )
 
 
 if __name__ == "__main__":
