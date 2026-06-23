@@ -47,6 +47,17 @@ COLUMNS = [
       "watched_year", "language", "comments", "poster_url", "watched_with",
   ]
 
+
+LANG_NAMES = {
+    "en": "English", "hi": "Hindi", "ta": "Tamil", "te": "Telugu",
+    "ml": "Malayalam", "kn": "Kannada", "mr": "Marathi", "bn": "Bengali",
+    "pa": "Punjabi", "gu": "Gujarati", "ur": "Urdu", "or": "Odia",
+    "fr": "French", "de": "German", "es": "Spanish", "it": "Italian",
+    "ja": "Japanese", "ko": "Korean", "zh": "Chinese", "pt": "Portuguese",
+    "ru": "Russian", "ar": "Arabic", "th": "Thai", "id": "Indonesian",
+    "tr": "Turkish", "pl": "Polish", "nl": "Dutch", "sv": "Swedish",
+    "no": "Norwegian", "da": "Danish", "fi": "Finnish",
+}
 VOTE_COLUMNS = ["entry_id", "voter_name", "vote"]
 
 SORT_OPTIONS = {
@@ -165,10 +176,10 @@ DETAIL_CSS = """
 """
 
 def render_entry_detail(entry_row, vote_summary):
-      st.markdown('<script>window.scrollTo({top:0,behavior:"smooth"});</script>', unsafe_allow_html=True)
+      import streamlit.components.v1 as _components
+      _components.html("<script>(function(){var w=window.parent||window;w.scrollTo(0,0);setTimeout(function(){w.scrollTo(0,0);},120);})();</script>", height=0)
       st.markdown(DETAIL_CSS, unsafe_allow_html=True)
       st.markdown('<div id="detail-top"></div>', unsafe_allow_html=True)
-      st.markdown("""<script>(function(){const root=window.parent||window;const reset=function(){try{root.scrollTo(0,0);}catch(e){}try{const containers=root.document.querySelectorAll('section.main,[data-testid="stAppViewContainer"]');containers.forEach(el=>{try{el.scrollTop=0;}catch(e){}});}catch(e){}try{const top=document.getElementById('detail-top');if(top)top.scrollIntoView({behavior:'auto',block:'start'});}catch(e){}};reset();setTimeout(reset,60);setTimeout(reset,180);})();</script>""", unsafe_allow_html=True)
       raw_entry_id = entry_row.get("entry_id", 0)
       try:
           _eid_s = _normalize_entry_id(raw_entry_id)
@@ -217,7 +228,6 @@ def render_entry_detail(entry_row, vote_summary):
       st.markdown(hero_html, unsafe_allow_html=True)
       left_col, right_col = st.columns([2.2, 1])
       with left_col:
-          st.markdown(f'<div class="detail-panel"><h4>Overview</h4><div style="color:#dbe4ee;line-height:1.75;font-size:0.97rem;white-space:pre-wrap;">{html.escape(overview) if overview else "No overview available yet."}</div></div>', unsafe_allow_html=True)
           st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
           comments_text = str(entry_row.get("comments", "") or "").strip()
           watched_with = str(entry_row.get("watched_with", "") or "").strip()
@@ -226,7 +236,8 @@ def render_entry_detail(entry_row, vote_summary):
           community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{html.escape(comments_text) if comments_text else "No review added yet."}</div></div>'
           st.markdown(community_panel, unsafe_allow_html=True)
       with right_col:
-          tmdb_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip()
+          _raw_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip().lower()
+          tmdb_lang = LANG_NAMES.get(_raw_lang, _raw_lang.upper() if len(_raw_lang) <= 3 else _raw_lang.capitalize())
           tmdb_votes = tmdb.get("tmdb_votes")
           next_ep = tmdb.get("next_episode_to_air") or {}
           season_facts_html = ""
@@ -752,8 +763,9 @@ def page_add_entry(entries_ws, current_name: str):
 
               poster_url = st.session_state.pop("pending_poster", "")
 
-              # FIX #1: UUID-based entry ID to prevent race conditions
-              next_id = int(datetime.now().strftime("%Y%m%d%H%M%S")) * 1000 + random.randint(0, 999)
+              # FIX entry_id: 13-digit epoch ms, safe from scientific notation in Sheets
+              import time as _time
+              next_id = int(_time.time() * 1000)
 
               row = {
                   "entry_id":     next_id,
@@ -806,9 +818,28 @@ def render_stats_grid(stats):
 
 def render_back_to_top_button():
       st.markdown("""
-      <div class="back-to-top-wrap">
-        <button onclick="window.scrollTo({top:0,behavior:'smooth'});">↑</button>
-      </div>
+      <style>
+      #btt-btn{position:fixed;right:18px;bottom:24px;z-index:9998;width:46px;height:46px;
+        border-radius:50%;border:none;background:#1e293b;color:#f1f5f9;font-size:1.25rem;
+        box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer;display:none;
+        align-items:center;justify-content:center;transition:opacity .2s,transform .2s}
+      #btt-btn.visible{display:flex}
+      #btt-btn:hover{background:#334155;transform:translateY(-2px)}
+      </style>
+      <button id="btt-btn" onclick="(window.parent||window).scrollTo({top:0,behavior:'smooth'})" title="Back to top">↑</button>
+      <script>
+      (function(){
+        var win=window.parent||window;
+        function check(){
+          var btn=document.getElementById('btt-btn');
+          if(!btn)return;
+          var scrollY=win.scrollY||win.pageYOffset||0;
+          if(scrollY>300){btn.classList.add('visible');}else{btn.classList.remove('visible');}
+        }
+        win.addEventListener('scroll',check,{passive:true});
+        check();
+      })();
+      </script>
       """, unsafe_allow_html=True)
 
 
