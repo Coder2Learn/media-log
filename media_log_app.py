@@ -1118,6 +1118,7 @@ def page_browse(entries_ws, votes_ws):
               if k.startswith("browse_page_"):
                   st.session_state[k] = 1
 
+      total = len(df)
       st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
       st.divider()
