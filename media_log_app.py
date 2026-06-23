@@ -785,56 +785,56 @@ def page_add_entry(entries_ws, current_name: str):
   # ─────────────────────────────────────────────
   #  PAGE: BROWSE (FIX #4: pagination reset, FIX #5: stable picks, Enhancement #3: sort)
   # ─────────────────────────────────────────────
+def render_stats_grid(stats):
+      st.markdown("""
+      <style>
+      .stats-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:8px 0 6px 0}
+      .stat-card{background:#dfe8ec;border-radius:0;padding:24px 22px;min-height:148px;display:flex;flex-direction:column;justify-content:flex-start;border:1px solid rgba(148,163,184,0.12)}
+      .stat-value{font-size:3rem;line-height:0.95;font-weight:300;color:#0f172a;letter-spacing:-0.03em}
+      .stat-label{margin-top:12px;font-size:1rem;line-height:1.2;color:#1f2937;font-weight:400;max-width:12ch}
+      .back-to-top-wrap{position:fixed;right:18px;bottom:20px;z-index:9998}
+      .back-to-top-wrap button{width:48px;height:48px;border-radius:999px;border:none;background:#111827;color:#fff;font-size:1.2rem;box-shadow:0 10px 24px rgba(0,0,0,.28);cursor:pointer}
+      @media (max-width: 900px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat-card{padding:18px 16px;min-height:124px}.stat-value{font-size:2.35rem}.stat-label{font-size:.92rem}}
+      </style>
+      """, unsafe_allow_html=True)
+      cards = []
+      for label, value in stats:
+          cards.append(f'<div class="stat-card"><div class="stat-value">{html.escape(str(value))}</div><div class="stat-label">{html.escape(str(label))}</div></div>')
+      st.markdown(f'<div class="stats-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+
+def render_back_to_top_button():
+      st.markdown("""
+      <div class="back-to-top-wrap">
+        <button onclick="window.scrollTo({top:0,behavior:'smooth'});">↑</button>
+      </div>
+      """, unsafe_allow_html=True)
+
+
 def page_browse(entries_ws, votes_ws):
-      top_l, top_r = st.columns([9, 1])
+      st.markdown("""
+      <style>
+      .browse-toolbar div[data-testid="stHorizontalBlock"] {align-items:end; gap:0.5rem;}
+      @media (max-width: 768px) { .browse-toolbar div[data-testid="stHorizontalBlock"] {gap:0.45rem;} }
+      </style>
+      """, unsafe_allow_html=True)
+
+      st.markdown('<div class="browse-toolbar">', unsafe_allow_html=True)
+      top_l, top_m = st.columns([1.4, 4.6])
       with top_l:
-          if st.button("🔄 Refresh"):
+          if st.button("🔄 Refresh", use_container_width=True):
               read_entries.clear()
               read_votes.clear()
               st.rerun()
-
-      with top_r:
-          if st.button("🔍", key="open_search_popup", help="Search titles"):
-              st.session_state["show_search_popup"] = True
-
-      if "show_search_popup" not in st.session_state:
-          st.session_state["show_search_popup"] = False
-
-      if st.session_state["show_search_popup"]:
-          st.markdown("""
-          <style>
-          .search-overlay {
-              position: fixed;
-              top: 70px;
-              left: 50%;
-              transform: translateX(-50%);
-              width: min(900px, 92vw);
-              background: #111827;
-              border: 1px solid rgba(148,163,184,0.18);
-              border-radius: 16px;
-              padding: 18px;
-              z-index: 9999;
-              box-shadow: 0 20px 60px rgba(0,0,0,0.45);
-          }
-          </style>
-          """, unsafe_allow_html=True)
-
-          pop_a, pop_b = st.columns([10, 1])
-          with pop_a:
-              search_text = st.text_input(
-                  "Search",
-                  value=st.session_state.get("browse_search", ""),
-                  placeholder="Search for movies or web series...",
-                  label_visibility="collapsed",
-                  key="browse_search_popup",
-              )
-              st.session_state["browse_search"] = search_text
-          with pop_b:
-              if st.button("✕", key="close_search_popup"):
-                  st.session_state["show_search_popup"] = False
-                  st.rerun()
-      else:
-          search_text = st.session_state.get("browse_search", "")
+      with top_m:
+          search_text = st.text_input(
+              "Search titles",
+              value=st.session_state.get("browse_search", ""),
+              placeholder="Search movies or web series...",
+              key="browse_search_inline",
+          )
+          st.session_state["browse_search"] = search_text
+      st.markdown('</div>', unsafe_allow_html=True)
 
       df           = read_entries(entries_ws)
       votes_df     = read_votes(votes_ws)
@@ -879,13 +879,15 @@ def page_browse(entries_ws, votes_ws):
       )
       total_cvotes = sum(v["yes"] + v["no"] for v in vote_summary.values())
 
-      m1, m2, m3, m4, m5, m6 = st.columns(6)
-      m1.metric("Total",           total)
-      m2.metric("Movies",          movies)
-      m3.metric("WebSeries",       series)
-      m4.metric("Avg Rating",      f"{avg_r:.1f}" if pd.notna(avg_r) else "–")
-      m5.metric("Recommend %",     f"{rec_pct}%")
-      m6.metric("Community Votes", total_cvotes)
+      stats = [
+          ("Total titles", total),
+          ("Movies", movies),
+          ("Web series", series),
+          ("Avg rating", f"{avg_r:.1f}" if pd.notna(avg_r) else "–"),
+          ("Recommend %", f"{rec_pct}%"),
+          ("Community votes", total_cvotes),
+      ]
+      render_stats_grid(stats)
 
       st.divider()
 
