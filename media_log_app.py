@@ -171,13 +171,17 @@ def tmdb_fetch_details(title: str, media_type: str) -> dict:
   # ─────────────────────────────────────────────
 DETAIL_CSS = """
 <style>
-.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}
+.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}.hero-meta-grid{display:flex;gap:32px;flex-wrap:wrap;margin-top:18px;margin-bottom:20px}.hero-meta-col{min-width:80px}.hero-meta-label{color:#94a3b8;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}.hero-meta-value{color:#f1f5f9;font-size:.97rem;font-weight:600;line-height:1.3}.hero-action-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:all .18s}.hero-action-primary{background:#7c3aed;color:#fff}.hero-action-primary:hover{background:#6d28d9}.hero-action-secondary{background:rgba(255,255,255,.10);color:#f1f5f9;border:1px solid rgba(255,255,255,.16)}.hero-action-secondary:hover{background:rgba(255,255,255,.18)}.hero-actions{display:flex;flex-direction:column;gap:10px;min-width:220px;margin-top:10px}
 </style>
 """
 
 def render_entry_detail(entry_row, vote_summary):
       import streamlit.components.v1 as _components
-      _components.html("<script>(function(){var w=window.parent||window;w.scrollTo(0,0);setTimeout(function(){w.scrollTo(0,0);},120);})();</script>", height=0)
+      if "my_collection" not in st.session_state:
+          st.session_state["my_collection"] = set()
+      if "my_watched_list" not in st.session_state:
+          st.session_state["my_watched_list"] = set()
+      _components.html("""<script>(function(){function go(){var w=window.parent||window;try{w.scrollTo({top:0,behavior:"instant"});}catch(e){w.scrollTo(0,0);}try{w.document.querySelector('[data-testid="stAppViewContainer"]').scrollTop=0;}catch(e){}}go();setTimeout(go,80);setTimeout(go,250);</script>""", height=1, scrolling=False)
       st.markdown(DETAIL_CSS, unsafe_allow_html=True)
       st.markdown('<div id="detail-top"></div>', unsafe_allow_html=True)
       raw_entry_id = entry_row.get("entry_id", 0)
@@ -224,7 +228,51 @@ def render_entry_detail(entry_row, vote_summary):
       tag_html = f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''
       year_html = f' • {html.escape(release_year)}' if release_year else ''
       hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ''
-      hero_html = f'<div class="detail-shell"><div class="detail-hero"><div class="detail-backdrop" style="{hero_bg_style}"></div><div class="detail-content"><div style="display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap;min-height:398px;"><div class="detail-poster">{poster_markup}</div><div style="flex:1;min-width:300px;"><div class="detail-kicker">{type_html}{year_html}</div><div class="detail-title">{title_html}</div>{tag_html}{meta_html}<div style="margin-bottom:14px;">{genre_html}</div><div class="detail-overview">{html.escape(overview) if overview else "No overview available yet."}</div></div></div></div></div></div>'
+      _director = ""
+      if tmdb.get("cast"):
+          # grab first crew director from TMDB data if stored; fallback blank
+          pass
+      _entry_status = str(entry_row.get("status","") or "").strip().lower()
+      _is_watched = _entry_status in ("watched",)
+      _is_in_collection = entry_id in st.session_state.get("my_collection", set())
+      _hero_lang = LANG_NAMES.get(str(tmdb.get("language") or entry_row.get("language","") or "").strip().lower(), str(tmdb.get("language") or entry_row.get("language","") or "—"))
+      _runtime_fmt = f"{runtime // 60}h {runtime % 60}m" if runtime else "—"
+      _origin_country = (tmdb.get("origin_country") or [""])[0] if isinstance(tmdb.get("origin_country"), list) else ""
+      hero_meta_cols = []
+      if _director:
+          hero_meta_cols.append(f'<div class="hero-meta-col"><div class="hero-meta-label">Directed By</div><div class="hero-meta-value">{html.escape(_director)}</div></div>')
+      if _origin_country:
+          hero_meta_cols.append(f'<div class="hero-meta-col"><div class="hero-meta-label">Country</div><div class="hero-meta-value">{html.escape(_origin_country)}</div></div>')
+      if _hero_lang:
+          hero_meta_cols.append(f'<div class="hero-meta-col"><div class="hero-meta-label">Language</div><div class="hero-meta-value">{html.escape(_hero_lang)}</div></div>')
+      if runtime:
+          hero_meta_cols.append(f'<div class="hero-meta-col"><div class="hero-meta-label">Runtime</div><div class="hero-meta-value">{html.escape(_runtime_fmt)}</div></div>')
+      hero_meta_row = f'<div class="hero-meta-grid">{"".join(hero_meta_cols)}</div>' if hero_meta_cols else ""
+      _watch_label = "✓ Watched" if _is_watched else "👁 Mark as Watched"
+      _col_label   = "✓ In Collection" if _is_in_collection else "＋ Add to Collection"
+      action_html = (
+          f'<div class="hero-actions">'
+          f'<button class="hero-action-btn hero-action-primary">{_watch_label}</button>'
+          f'<button class="hero-action-btn hero-action-secondary">{_col_label}</button>'
+          f'</div>'
+      )
+      hero_html = (
+          f'<div class="detail-shell"><div class="detail-hero">'
+          f'<div class="detail-backdrop" style="{hero_bg_style}"></div>'
+          f'<div class="detail-content">'
+          f'<div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-height:380px;">'
+          f'<div class="detail-poster">{poster_markup}</div>'
+          f'<div style="flex:1;min-width:260px;">'
+          f'<div class="detail-kicker">{type_html}{year_html}</div>'
+          f'<div class="detail-title">{title_html}</div>'
+          f'{tag_html}'
+          f'<div style="margin-bottom:10px;">{genre_html}</div>'
+          f'{hero_meta_row}'
+          f'</div>'
+          f'<div style="display:flex;flex-direction:column;justify-content:flex-start;padding-top:8px;">{action_html}</div>'
+          f'</div>'
+          f'</div></div></div>'
+      )
       st.markdown(hero_html, unsafe_allow_html=True)
       left_col, right_col = st.columns([2.2, 1])
       with left_col:
@@ -235,6 +283,16 @@ def render_entry_detail(entry_row, vote_summary):
           watched_with_html = f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''
           community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{html.escape(comments_text) if comments_text else "No review added yet."}</div></div>'
           st.markdown(community_panel, unsafe_allow_html=True)
+          _my_coll  = st.session_state.get("my_collection", set())
+          _my_watch = st.session_state.get("my_watched_list", set())
+          if _my_coll or _my_watch:
+              st.markdown("### My Lists")
+          if _my_watch:
+              with st.expander(f"👁 My Watched List ({len(_my_watch)})", expanded=False):
+                  st.write(", ".join(str(x) for x in _my_watch))
+          if _my_coll:
+              with st.expander(f"📚 My Collection ({len(_my_coll)})", expanded=False):
+                  st.write(", ".join(str(x) for x in _my_coll))
       with right_col:
           _raw_lang = str(tmdb.get("language") or entry_row.get("language", "") or "").strip().lower()
           tmdb_lang = LANG_NAMES.get(_raw_lang, _raw_lang.upper() if len(_raw_lang) <= 3 else _raw_lang.capitalize())
@@ -251,6 +309,18 @@ def render_entry_detail(entry_row, vote_summary):
           st.markdown(facts_html, unsafe_allow_html=True)
           if tmdb.get("trailer_url"):
               st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
+      st.markdown("---")
+      _col_in = entry_id in st.session_state.get("my_collection", set())
+      _w_in   = entry_id in st.session_state.get("my_watched_list", set())
+      if st.button("✓ Watched" if _w_in else "👁 Mark as Watched", key=f"btn_watched_{entry_id}", use_container_width=True):
+              st.session_state.setdefault("my_watched_list", set()).add(entry_id)
+              st.rerun()
+      if st.button("✓ In Collection" if _col_in else "＋ Add to Collection", key=f"btn_collect_{entry_id}", use_container_width=True):
+              if _col_in:
+                  st.session_state["my_collection"].discard(entry_id)
+              else:
+                  st.session_state.setdefault("my_collection", set()).add(entry_id)
+              st.rerun()
       cast = tmdb.get("cast", [])
       if cast:
           st.markdown("### Cast")
@@ -554,6 +624,8 @@ def render_sidebar():
           st.session_state["voter_name"]   = name
           st.session_state["sidebar_name"] = name
 
+      st.sidebar.divider()
+      st.sidebar.caption("Filters and sort options appear here when you're on the Browse page.")
       st.sidebar.divider()
       st.sidebar.markdown(
           "**How it works**\n"
@@ -899,28 +971,6 @@ def page_browse(entries_ws, votes_ws):
           st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
           return
 
-      # ── Metrics ───────────────────────────────────────────────────
-      total  = len(df)
-      movies = int((df["type"].str.lower() == "movie").sum()) if "type" in df.columns else 0
-      series = int((df["type"].str.lower() == "webseries").sum()) if "type" in df.columns else 0
-      avg_r  = df["rating"].mean() if "rating" in df.columns else float("nan")
-      watched = df[df["status"].str.lower() == "watched"] if "status" in df.columns else df
-      rec_pct = (
-          int(100 * (watched["recommend"].str.lower() == "yes").sum() / max(len(watched), 1))
-          if "recommend" in df.columns else 0
-      )
-      total_cvotes = sum(v["yes"] + v["no"] for v in vote_summary.values())
-
-      stats = [
-          ("Total titles", total),
-          ("Movies", movies),
-          ("Web series", series),
-          ("Avg rating", f"{avg_r:.1f}" if pd.notna(avg_r) else "–"),
-          ("Recommend %", f"{rec_pct}%"),
-          ("Community votes", total_cvotes),
-      ]
-      render_stats_grid(stats)
-
       st.divider()
 
       # ── ENHANCEMENT #4: Activity feed ─────────────────────────────
@@ -1070,7 +1120,6 @@ def page_browse(entries_ws, votes_ws):
 
       st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-      view_mode = st.radio("View", ["Cards", "Table"], horizontal=True, key="view_radio")
       st.divider()
 
       # -- Pagination + render helper (FIX #9: explicit params)
@@ -1112,17 +1161,17 @@ def page_browse(entries_ws, votes_ws):
 
       tab_all, tab_movies, tab_series = st.tabs(["🎬 All", "🎥 Movies", "📺 Web Series"])
       with tab_all:
-          _paginate_render(filtered, "all", view_mode, vote_summary, votes_df, votes_ws)
+          _paginate_render(filtered, "all", "Cards", vote_summary, votes_df, votes_ws)
       with tab_movies:
           if movies_df.empty:
               st.info("No movies match the current filters.")
           else:
-              _paginate_render(movies_df, "movies", view_mode, vote_summary, votes_df, votes_ws)
+              _paginate_render(movies_df, "movies", "Cards", vote_summary, votes_df, votes_ws)
       with tab_series:
           if series_df.empty:
               st.info("No web series match the current filters.")
           else:
-              _paginate_render(series_df, "series", view_mode, vote_summary, votes_df, votes_ws)
+              _paginate_render(series_df, "series", "Cards", vote_summary, votes_df, votes_ws)
 
 
   # ─────────────────────────────────────────────
@@ -1134,6 +1183,21 @@ def page_reports(entries_ws):
       if df.empty:
           st.info("No data yet.")
           return
+
+      _r_total   = len(df)
+      _r_movies  = int((df["type"].str.lower() == "movie").sum()) if "type" in df.columns else 0
+      _r_series  = int((df["type"].str.lower() == "webseries").sum()) if "type" in df.columns else 0
+      _r_avg     = df["rating"].mean() if "rating" in df.columns else float("nan")
+      _r_watched = df[df["status"].str.lower() == "watched"] if "status" in df.columns else df
+      _r_rec_pct = int(100 * (_r_watched["recommend"].str.lower() == "yes").sum() / max(len(_r_watched), 1)) if "recommend" in df.columns else 0
+      render_stats_grid([
+          ("Total titles", _r_total),
+          ("Movies", _r_movies),
+          ("Web series", _r_series),
+          ("Avg rating", f"{_r_avg:.1f}" if pd.notna(_r_avg) else "–"),
+          ("Recommend %", f"{_r_rec_pct}%"),
+      ])
+      st.divider()
 
       tab1, tab2, tab3, tab4 = st.tabs(["By Platform", "By Genre", "By Person", "Watched Together"])
 
