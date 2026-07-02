@@ -896,7 +896,7 @@ def page_add_entry(entries_ws, current_name: str):
                       st.session_state["pf_genres"] = res.get("genres", [])
                       st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                       st.session_state["pf_poster"] = res.get("poster", "")
-                      st.session_state["addformreset"] = st.session_state.get("addformreset", 0) + 1
+                      st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
                       st.session_state.pop("tmdb_results", None)
                       st.rerun()
 
@@ -1058,12 +1058,12 @@ def page_add_entry(entries_ws, current_name: str):
                     for k in ["pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster"]:
                         st.session_state.pop(k, None)
 
-                        # C5 — clear the per-title duplicate confirmation flag
-                        st.session_state.pop(dup_key, None)
-                        # new — force widget reset since clear_on_submit is now False
-                        st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
+                    # C5 — clear the per-title duplicate confirmation flag
+                    st.session_state.pop(dup_key, None)
+                    # new — force widget reset since clear_on_submit is now False
+                    st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
 
-                        st.success(f'"{title.strip()}" saved! Add another below.')
+                    st.success(f'"{title.strip()}" saved! Add another below.')
               except Exception as e:
                         st.error("Error saving entry.")
 
