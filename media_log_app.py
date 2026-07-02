@@ -34,10 +34,29 @@ PLATFORM_NAME_ALIASES = {
     "Disney+ Hotstar": "Jio Hotstar",
     "SonyLiv": "Sony LIV",
     "ZEE5": "Zee5",
+    # TMDB "networks" field commonly uses these spellings
+    "Amazon Prime Video": "Prime Video",
+    "JioHotstar": "Jio Hotstar",
+    "SonyLIV": "Sony LIV",
 }
 def _normalize_platform_name(p: str) -> str:
     """Single source of truth for platform name aliasing (M6, L4)."""
     return PLATFORM_NAME_ALIASES.get(p, p)
+
+def _platform_from_tmdb_networks(networks: list) -> str:
+    """Map TMDB 'networks' names to a known PLATFORMS entry. First match wins;
+    returns '' (safe default, same as an unrecognized genre) if none match."""
+    for n in networks or []:
+        mapped = _normalize_platform_name((n or "").strip())
+        if mapped in PLATFORMS:
+            return mapped
+    return ""
+
+def _language_from_tmdb_code(code: str) -> str:
+    """Map a TMDB original_language ISO code to a known LANGUAGES entry.
+    Returns '' if TMDB's language isn't one of the app's dropdown options."""
+    name = LANG_NAMES.get((code or "").strip().lower(), "")
+    return name if name in LANGUAGES else ""
 
 GENRES_LIST = [
       "Action", "Adventure", "Animation", "Comedy", "Crime",
@@ -194,12 +213,13 @@ def tmdb_fetch_details(title: str, media_type: str, _v: int = 2) -> dict:
                   "poster_url": season_poster,
               })
           next_episode = data.get("next_episode_to_air") or {}
+          networks = [n.get("name", "") for n in (data.get("networks") or []) if n.get("name")]
           
           director = next(
                 (c.get("name", "") for c in data.get("credits", {}).get("crew", []) if c.get("job") == "Director"),
                 ""
             )
-          return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
+          return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "networks": networks, "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
       except Exception:
           return {}
 
@@ -244,6 +264,8 @@ def tmdb_fetch_details_by_id(tmdb_id: str, media_type: str, _v: int = 2) -> dict
                 "overview": s.get("overview", ""), "poster_url": season_poster,
             })
         next_episode = data.get("next_episode_to_air") or {}
+        # networks: TV only — movies have no equivalent "where to stream" field from this endpoint
+        networks = [n.get("name", "") for n in (data.get("networks") or []) if n.get("name")]
         return {
             "name": data.get("title") or data.get("name") or "",
             "tmdb_id": tmdb_id,
@@ -251,6 +273,7 @@ def tmdb_fetch_details_by_id(tmdb_id: str, media_type: str, _v: int = 2) -> dict
             "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres,
             "release_date": data.get("release_date") or data.get("first_air_date") or "",
             "language": data.get("original_language", ""),
+            "networks": networks,
             "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0],
             "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"),
             "status": data.get("status", ""), "cast": cast, "director": director,
@@ -896,15 +919,27 @@ def page_add_entry(entries_ws, current_name: str):
                       st.session_state["pf_genres"] = res.get("genres", [])
                       st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                       st.session_state["pf_poster"] = res.get("poster", "")
+
+                      # Platform + Language need the full details endpoint (search results
+                      # don't carry networks/original_language) — fetch once by ID.
+                      with st.spinner("Fetching platform & language…"):
+                          details = tmdb_fetch_details_by_id(
+                              res.get("id", ""), st.session_state.get("tmdb_type_sel", "Movie")
+                          )
+                      st.session_state["pf_platform"] = _platform_from_tmdb_networks(details.get("networks", []))
+                      st.session_state["pf_language"] = _language_from_tmdb_code(details.get("language", ""))
+
                       st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
                       st.session_state.pop("tmdb_results", None)
                       st.rerun()
 
-      pf_title  = st.session_state.get("pf_title",  "")
-      pf_year   = st.session_state.get("pf_year",   "")
-      pf_genres = st.session_state.get("pf_genres", [])
-      pf_type   = st.session_state.get("pf_type",   "Movie")
-      pf_poster = st.session_state.get("pf_poster", "")
+      pf_title    = st.session_state.get("pf_title",    "")
+      pf_year     = st.session_state.get("pf_year",     "")
+      pf_genres   = st.session_state.get("pf_genres",   [])
+      pf_type     = st.session_state.get("pf_type",     "Movie")
+      pf_poster   = st.session_state.get("pf_poster",   "")
+      pf_platform = st.session_state.get("pf_platform", "")
+      pf_language = st.session_state.get("pf_language", "")
 
       if pf_poster:
           st.session_state["pending_poster"] = pf_poster
@@ -934,8 +969,9 @@ def page_add_entry(entries_ws, current_name: str):
               type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
               media_type = st.selectbox("Type", type_opts, index=type_idx, key=f"add_type_{reset_n}")
           with c4:
+              platform_idx = PLATFORMS.index(pf_platform) if pf_platform in PLATFORMS else 0
               platform = st.selectbox(
-                  "Platform", PLATFORMS, index=0,
+                  "Platform", PLATFORMS, index=platform_idx,
                   help="Pick the main platform where you watched it.",  key=f"add_platform_{reset_n}"
               )
           with c5:
@@ -951,7 +987,8 @@ def page_add_entry(entries_ws, current_name: str):
                   help="Select all genres that apply.", key=f"add_genre_{reset_n}"
               )
           with c7:
-              language = st.selectbox("Language", LANGUAGES, index=0, key=f"add_language_{reset_n}")
+              language_idx = LANGUAGES.index(pf_language) if pf_language in LANGUAGES else 0
+              language = st.selectbox("Language", LANGUAGES, index=language_idx, key=f"add_language_{reset_n}")
 
           rating       = None
           recommend    = ""
@@ -1055,7 +1092,7 @@ def page_add_entry(entries_ws, current_name: str):
                     read_entries.clear()
 
                     # existing cleanup — TMDB autofill keys
-                    for k in ["pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster"]:
+                    for k in ["pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"]:
                         st.session_state.pop(k, None)
 
                     # C5 — clear the per-title duplicate confirmation flag
