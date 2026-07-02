@@ -503,7 +503,7 @@ def recommend_badge(recommend: str) -> str:
           return '<span style="background:#6b7280;color:#fff;padding:2px 8px;border-radius:999px;font-size:0.72rem;font-weight:500;">👎 No</span>'
       return ""
 
-def _vote_percentages(yes: int, no: int):
+def vote_percentages(yes: int, no: int):
     """Single source of truth for vote percentage math (L7)."""
     total = yes + no
     if total == 0:
@@ -1812,7 +1812,7 @@ def _render_table(filtered, vote_summary):
           total  = counts["yes"] + counts["no"]
           if total == 0:
               return "—"
-          pct = _vote_percentages(counts["yes"] , counts["no"])
+          pct = vote_percentages(counts["yes"] , counts["no"])
           return f'👍{counts["yes"]} / 👎{counts["no"]} ({pct}%)'
 
       df_display["community_votes"] = df_display.apply(_comm_votes, axis=1)
