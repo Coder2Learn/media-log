@@ -896,6 +896,7 @@ def page_add_entry(entries_ws, current_name: str):
                       st.session_state["pf_genres"] = res.get("genres", [])
                       st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
                       st.session_state["pf_poster"] = res.get("poster", "")
+                      st.session_state["addformreset"] = st.session_state.get("addformreset", 0) + 1
                       st.session_state.pop("tmdb_results", None)
                       st.rerun()
 
@@ -916,7 +917,7 @@ def page_add_entry(entries_ws, current_name: str):
                   "Your name *",
                   value=current_name,
                   placeholder="e.g. Pankaj",
-                  key=f"add_by_{reset_n}"
+                  key=f"add_addedby_{reset_n}",
               )
           with c2:
               title = st.text_input(
@@ -924,7 +925,7 @@ def page_add_entry(entries_ws, current_name: str):
                   value=pf_title,
                   placeholder="e.g. Mirzapur Season 3",
                   help="Use original title if possible.",
-                  key=f"add_title_{reset_n}"
+                  key=f"add_title_{reset_n}",
               )
 
           c3, c4, c5 = st.columns(3)
@@ -977,14 +978,14 @@ def page_add_entry(entries_ws, current_name: str):
                       min_value=min_year,
                       max_value=max_year,
                       value=yr_default,
-                      step=1, key=f"add_year_{reset_n}"
+                      step=1, key=f"add_watchedyear_{reset_n}"
                   )
 
           # ENHANCEMENT #10: "Watched with" field
           watched_with = st.text_input(
               "Watched with (optional)",
               placeholder="e.g. Rohan, Priya",
-              help="Who did you watch this with?",
+              help="Who did you watch this with?", key=f"add_watchedwith_{reset_n}"
           )
 
           with st.expander("Add a short review (optional)"):
