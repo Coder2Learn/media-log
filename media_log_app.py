@@ -540,7 +540,7 @@ def _resolve_entry_id(row) -> int | None:
     Never falls back to a positional index — that value can collide with
     a real entry_id and misdirect votes/edit/delete (C1)."""
     raw = row.get("entry_id", "")
-    norm = normalize_entry_id(raw)  # computed once, not twice (L3)
+    norm = _normalize_entry_id(raw)  # computed once, not twice (L3)
     if norm in ("", "nan", "None"):
         return None
     try:
