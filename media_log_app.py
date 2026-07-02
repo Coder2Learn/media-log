@@ -512,21 +512,23 @@ def _vote_percentages(yes: int, no: int):
     return pct_yes, 100 - pct_yes
 
 def community_bar(yes_count: int, no_count: int) -> str:
-      pct_yes, pct_no = _vote_percentages(yes_count, no_count)
-      if pct_yes is None:
-          return '<span style="font-size:0.75rem;color:#9ca3af;font-style:italic;">No community votes yet</span>'
-      pct_yes = int(round(100 * yes_count / total))
-      pct_no  = 100 - pct_yes
-      return f"""
-  <div style="font-size:0.75rem;margin-top:4px;">
-    <span style="color:#16a34a;font-weight:600;">👍 {yes_count}</span>
-    &nbsp;·&nbsp;<span style="color:#9ca3af;font-weight:600;">👎 {no_count}</span>
-    &nbsp;·&nbsp;<span style="color:#9ca3af;">{pct_yes}% recommend</span>
-    <div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">
-      <div style="width:{pct_yes}%;background:#16a34a;"></div>
-      <div style="width:{pct_no}%;background:#4b5563;"></div>
+    pct_yes, pct_no = vote_percentages(yes_count, no_count)
+    if pct_yes is None:
+        return '<span style="font-size:0.75rem;color:#9ca3af;font-style:italic;">No community votes yet</span>'
+
+    return f"""
+    <div style="font-size:0.75rem;margin-top:4px;">
+      <span style="color:#16a34a;font-weight:600;">{yes_count} yes</span>
+      &nbsp;&nbsp;
+      <span style="color:#9ca3af;font-weight:600;">{no_count} no</span>
+      &nbsp;&nbsp;
+      <span style="color:#9ca3af;">{pct_yes}% recommend</span>
+      <div style="display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:3px;background:#374151;">
+        <div style="width:{pct_yes}%;background:#16a34a;"></div>
+        <div style="width:{pct_no}%;background:#4b5563;"></div>
+      </div>
     </div>
-  </div>"""
+    """
 
 
 def _normalize_entry_id(value) -> str:
