@@ -1706,16 +1706,17 @@ def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
               with sub_col1:
                     if st.form_submit_button("Save changes", type="primary"):
                         try:
-                            row_idx = find_row_index(entries_ws, entry_id)
-                        except RowLookupError as e:
-                            st.error(f"Could not verify entry location: {e}")
-                            row_idx = None
-                        if not row_idx:
-                            st.error("Could not find entry.")
-                        elif _row_snapshot_changed(entries_ws, row_idx, row):
+                            try:
+                                row_idx = find_row_index(entries_ws, entry_id)
+                            except RowLookupError as e:
+                                st.error(f"Could not verify entry location: {e}")
+                                row_idx = None
+                            if not row_idx:
+                                st.error("Could not find entry.")
+                            elif _row_snapshot_changed(entries_ws, row_idx, row):
                                 st.warning("This entry was changed by someone else since you opened it. Reload and try again.")
                                 st.session_state.pop(edit_key, None)
-                        else:
+                            else:
                                 updated = {c: row.get(c, "") for c in COLUMNS}
                                 updated["title"] = new_title.strip()
                                 updated["platform"] = new_platform
