@@ -16,52 +16,91 @@ html, body, [class*="css"] { font-family: 'General Sans', sans-serif; }
 .detail-title, .stat-value { font-family: 'Cabinet Grotesk', sans-serif; }
 :root {
   /* Surfaces */
-  --bg:            #0b0f17;
-  --surface:       #11161f;
-  --surface-2:     #161c27;
-  --surface-3:     #1c2330;
-  --border:        rgba(148,163,184,0.14);
-  --border-strong: rgba(148,163,184,0.28);
+--bg:            #0b0f17;
+--surface:       #11161f;
+--surface-2:     #161c27;
+--surface-3:     #1c2330;
+--border:        rgba(148,163,184,0.14);
+--border-strong: rgba(148,163,184,0.28);
 
   /* Text */
-  --text:          #f1f5f9;
-  --text-muted:    #a3adc2;
-  --text-faint:    #6b7789;
+--text:          #f1f5f9;
+--text-muted:    #a3adc2;
+--text-faint:    #6b7789;
 
   /* Accent */
-  --accent:        #7c3aed;
-  --accent-hover:  #6d28d9;
-  --accent-soft:   rgba(124,58,237,0.14);
+--accent:        #7c3aed;
+--accent-hover:  #6d28d9;
+--accent-soft:   rgba(124,58,237,0.14);
 
   /* Status */
-  --success:       #22c55e;
-  --warning:       #f97316;
-  --info:          #3b82f6;
-  --danger:        #ef4444;
-  --neutral:       #94a3b8;
+--success:       #22c55e;
+--warning:       #f97316;
+--info:          #3b82f6;
+--danger:        #ef4444;
+--neutral:       #94a3b8;
 
   /* Radius / Shadow */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.24);
-  --shadow-md: 0 8px 24px rgba(0,0,0,0.32);
-  --shadow-lg: 0 20px 50px rgba(0,0,0,0.40);
+--radius-sm: 8px;
+--radius-md: 12px;
+--radius-lg: 18px;
+--shadow-sm: 0 2px 8px rgba(0,0,0,0.24);
+--shadow-md: 0 8px 24px rgba(0,0,0,0.32);
+--shadow-lg: 0 20px 50px rgba(0,0,0,0.40);
 
   /* Motion */
-  --ease: cubic-bezier(0.16,1,0.3,1);
-  --transition: all 0.18s var(--ease);
+--ease: cubic-bezier(0.16,1,0.3,1);
+--transition: all 0.18s var(--ease);
 }
 
 /* Focus visibility for keyboard users (accessibility fix) */
 button:focus-visible, [role="button"]:focus-visible,
 input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid var(--accent) !important;
-  outline-offset: 2px !important;
-  border-radius: var(--radius-sm) !important;
+outline: 2px solid var(--accent) !important;
+outline-offset: 2px !important;
+border-radius: var(--radius-sm) !important;
 }
 </style>
 """
+
+CLICKABLE_CARD_CSS = """
+<style>
+.wlog-card-clickable {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.wlog-card-clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.wlog-card-clickable:active {
+    transform: translateY(0);
+}
+</style>
+"""
+
+VOTE_CSS = """
+<style>
+.vote-wrap {
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.22);
+    margin-top: 8px;
+}
+.vote-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e5e7eb;
+    margin-bottom: 8px;
+}
+.vote-subtle {
+    font-size: 0.78rem;
+    color: #94a3b8;
+}
+</style>
+"""
+
 MOBILE_CSS = """
 <style>
 /* ---- Cards: stack poster above content on narrow screens ---- */
@@ -104,9 +143,9 @@ MOBILE_CSS = """
 </style>
 """
 
-  # ─────────────────────────────────────────────
-  #  CONFIG
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  CONFIG
+# ─────────────────────────────────────────────
 SPREADSHEET_TITLE    = "MediaLog"
 SERVICE_ACCOUNT_FILE = "media-log-service-account.json"
 TMDB_BASE            = "https://api.themoviedb.org/3"
@@ -114,15 +153,15 @@ TMDB_IMG_BASE        = "https://image.tmdb.org/t/p/w200"
 PAGE_SIZE            = 100
 
 PLATFORM_LOGOS = {
-      "Netflix":         "https://cdn.simpleicons.org/netflix",
-      "Prime Video":     "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Amazon_Prime_Video_blue_logo_1.svg/960px-Amazon_Prime_Video_blue_logo_1.svg.png?_=20230318051251",
-      "YouTube":         "https://cdn.simpleicons.org/youtube",
-      "Jio Hotstar": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jiohotstar.png",
-      "Sony LIV": "https://upload.wikimedia.org/wikipedia/commons/f/f7/SonyLIV_2020.png",
-      "Zee5": "https://cdn.brandfetch.io/idG83-n-Gw/w/400/h/400/theme/dark/icon.jpeg?c=1dxbfHSJFAPEGdCLU4o5B",
-      "Other":           "",
-      "":                "",
-  }
+    "Netflix":         "https://cdn.simpleicons.org/netflix",
+    "Prime Video":     "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Amazon_Prime_Video_blue_logo_1.svg/960px-Amazon_Prime_Video_blue_logo_1.svg.png?_=20230318051251",
+    "YouTube":         "https://cdn.simpleicons.org/youtube",
+    "Jio Hotstar": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jiohotstar.png",
+    "Sony LIV": "https://upload.wikimedia.org/wikipedia/commons/f/f7/SonyLIV_2020.png",
+    "Zee5": "https://cdn.brandfetch.io/idG83-n-Gw/w/400/h/400/theme/dark/icon.jpeg?c=1dxbfHSJFAPEGdCLU4o5B",
+    "Other":           "",
+    "":                "",
+}
 
 PLATFORMS = ["", "Netflix", "Prime Video", "Jio Hotstar", "Sony LIV", "Zee5", "YouTube", "Other"]
 PLATFORM_NAME_ALIASES = {
@@ -154,19 +193,19 @@ def _language_from_tmdb_code(code: str) -> str:
     return name if name in LANGUAGES else ""
 
 GENRES_LIST = [
-      "Action", "Adventure", "Animation", "Comedy", "Crime",
-      "Documentary", "Drama", "Family", "Fantasy", "Horror",
-      "Romance", "Sci-Fi", "Thriller", "Other",
-  ]
+    "Action", "Adventure", "Animation", "Comedy", "Crime",
+    "Documentary", "Drama", "Family", "Fantasy", "Horror",
+    "Romance", "Sci-Fi", "Thriller", "Other",
+]
 
 LANGUAGES = ["", "Hindi", "English", "Tamil", "Telugu", "Malayalam",
-               "Kannada", "Bengali", "Marathi", "Other"]
+            "Kannada", "Bengali", "Marathi", "Other"]
 
 COLUMNS = [
-      "entry_id", "timestamp", "added_by", "title", "type", "genre",
-      "platform", "status", "rating", "recommend",
-      "watched_year", "language", "comments", "poster_url", "watched_with", "tmdb_id",
-  ]
+    "entry_id", "timestamp", "added_by", "title", "type", "genre",
+    "platform", "status", "rating", "recommend",
+    "watched_year", "language", "comments", "poster_url", "watched_with", "tmdb_id",
+]
 
 DETAIL_VIEW_KEYS = ["selected_entry_id", "selected_entry_title", "selected_entry_type"]
 
@@ -188,14 +227,14 @@ LANG_NAMES = {
 VOTE_COLUMNS = ["entry_id", "voter_name", "vote"]
 
 SORT_OPTIONS = {
-      "Rating (High → Low)": ("rating", False),
-      "Rating (Low → High)": ("rating", True),
-      "Recently Added": ("timestamp", False),
-      "Oldest First": ("timestamp", True),
-      "Title (A → Z)": ("title", True),
-      "Title (Z → A)": ("title", False),
-      "Most Voted": ("_total_votes", False),
-  }
+    "Rating (High → Low)": ("rating", False),
+    "Rating (Low → High)": ("rating", True),
+    "Recently Added": ("timestamp", False),
+    "Oldest First": ("timestamp", True),
+    "Title (A → Z)": ("title", True),
+    "Title (Z → A)": ("title", False),
+    "Most Voted": ("_total_votes", False),
+}
 
 TMDB_GENRE_MAP_MOVIE = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -218,41 +257,41 @@ def normalize_media_type(raw: str) -> str:
     val = str(raw or "").strip().lower().replace(" ", "")
     return MEDIA_TYPE_SERIES if val in ("webseries", "tvseries", "tv", "series") else MEDIA_TYPE_MOVIE
 
-  # ─────────────────────────────────────────────
-  #  TMDB HELPER (FIX #9: cached with TTL)
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  TMDB HELPER (FIX #9: cached with TTL)
+# ─────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def tmdb_search(title: str, media_type: str, _v: int = 2) -> list:
-      """Return up to 5 results from TMDB. Cached for 1 hour."""
-      key = st.secrets.get("tmdb_api_key", "")
-      if not key or not title.strip():
-          return []
-      t = "tv" if media_type == MEDIA_TYPE_SERIES else "movie"
-      try:
-          r = requests.get(
-              f"{TMDB_BASE}/search/{t}",
-              params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
-              timeout=5,
-          )
-          r.raise_for_status()
-          results = r.json().get("results", [])
-          if not results:
-              return []
-          date_field = "first_air_date" if t == "tv" else "release_date"
-          out = []
-          for item in results[:5]:
-              year = (item.get(date_field, "") or "")[:4]
-              genre_ids = item.get("genre_ids", [])
-              genre_map = TMDB_GENRE_MAP_TV if t == "tv" else TMDB_GENRE_MAP_MOVIE
-              genres = list(dict.fromkeys(genre_map.get(gid, "Other") for gid in genre_ids[:3]))
-              poster = ""
-              if item.get("poster_path"):
-                  poster = TMDB_IMG_BASE + item["poster_path"]
-              name = item.get("title") or item.get("name") or title
-              out.append({"year": year, "genres": genres, "poster": poster, "name": name, "id": item.get("id")})
-          return out
-      except Exception:
-          return []
+    """Return up to 5 results from TMDB. Cached for 1 hour."""
+    key = st.secrets.get("tmdb_api_key", "")
+    if not key or not title.strip():
+        return []
+    t = "tv" if media_type == MEDIA_TYPE_SERIES else "movie"
+    try:
+        r = requests.get(
+            f"{TMDB_BASE}/search/{t}",
+            params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1},
+            timeout=5,
+        )
+        r.raise_for_status()
+        results = r.json().get("results", [])
+        if not results:
+            return []
+        date_field = "first_air_date" if t == "tv" else "release_date"
+        out = []
+        for item in results[:5]:
+            year = (item.get(date_field, "") or "")[:4]
+            genre_ids = item.get("genre_ids", [])
+            genre_map = TMDB_GENRE_MAP_TV if t == "tv" else TMDB_GENRE_MAP_MOVIE
+            genres = list(dict.fromkeys(genre_map.get(gid, "Other") for gid in genre_ids[:3]))
+            poster = ""
+            if item.get("poster_path"):
+                poster = TMDB_IMG_BASE + item["poster_path"]
+            name = item.get("title") or item.get("name") or title
+            out.append({"year": year, "genres": genres, "poster": poster, "name": name, "id": item.get("id")})
+        return out
+    except Exception:
+        return []
 
 def tmdb_get_with_retry(url, params, timeout, retries=1):
     last_exc = None
@@ -277,59 +316,58 @@ def _tmdb_image_url(size_url_base: str, primary: dict, fallback: dict, key: str)
 
 @st.cache_data(ttl=3600)
 def tmdb_fetch_details(title: str, media_type: str, _v: int = 2) -> dict:
-      key = st.secrets.get("tmdb_api_key", "")
-      if not key or not title.strip():
-          return {}
-      t = "tv" if media_type == MEDIA_TYPE_SERIES else "movie"
-      try:
-          sr = tmdb_get_with_retry(f"{TMDB_BASE}/search/{t}", params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1}, timeout=6)
-          sr.raise_for_status()
-          results = sr.json().get("results", [])
-          if not results:
-              return {}
-          best = _pick_tmdb_result(results, title, None) or results[0]
-          tmdb_id = best.get("id")
-          if not tmdb_id:
-              return {}
-          dr = tmdb_get_with_retry(f"{TMDB_BASE}/{t}/{tmdb_id}", params={"api_key": key, "language": "en-US", "append_to_response": "credits,videos"}, timeout=8)
-          dr.raise_for_status()
-          data = dr.json()
-          poster_url = _tmdb_image_url("https://image.tmdb.org/t/p/w342", data, best, "poster_path")
-          backdrop_url = _tmdb_image_url("https://image.tmdb.org/t/p/w1280", data, best, "backdrop_path")
-          videos = data.get("videos", {}).get("results", [])
-          trailer_url = ""
-          for v in videos:
-              if v.get("site") == "YouTube" and v.get("key") and v.get("type") in ("Trailer", "Teaser"):
-                  trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
-                  break
-          cast = []
-          for c in data.get("credits", {}).get("cast", [])[:8]:
-              profile_url = ("https://image.tmdb.org/t/p/w185" + c["profile_path"]) if c.get("profile_path") else ""
-              cast.append({"name": c.get("name", ""), "character": c.get("character", ""), "profile_url": profile_url})
-          genres = [g.get("name", "") for g in data.get("genres", []) if g.get("name")]
-          seasons = []
-          for s in data.get("seasons", []) or []:
-              if not s:
-                  continue
-              season_poster = ("https://image.tmdb.org/t/p/w342" + s["poster_path"]) if s.get("poster_path") else ""
-              seasons.append({
-                  "season_number": s.get("season_number"),
-                  "name": s.get("name", ""),
-                  "air_date": s.get("air_date", ""),
-                  "episode_count": s.get("episode_count"),
-                  "overview": s.get("overview", ""),
-                  "poster_url": season_poster,
-              })
-          next_episode = data.get("next_episode_to_air") or {}
-          networks = [n.get("name", "") for n in (data.get("networks") or []) if n.get("name")]
-          
-          director = next(
+    key = st.secrets.get("tmdb_api_key", "")
+    if not key or not title.strip():
+        return {}
+    t = "tv" if media_type == MEDIA_TYPE_SERIES else "movie"
+    try:
+        sr = tmdb_get_with_retry(f"{TMDB_BASE}/search/{t}", params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1}, timeout=6)
+        sr.raise_for_status()
+        results = sr.json().get("results", [])
+        if not results:
+            return {}
+        best = _pick_tmdb_result(results, title, None) or results[0]
+        tmdb_id = best.get("id")
+        if not tmdb_id:
+            return {}
+        dr = tmdb_get_with_retry(f"{TMDB_BASE}/{t}/{tmdb_id}", params={"api_key": key, "language": "en-US", "append_to_response": "credits,videos"}, timeout=8)
+        dr.raise_for_status()
+        data = dr.json()
+        poster_url = _tmdb_image_url("https://image.tmdb.org/t/p/w342", data, best, "poster_path")
+        backdrop_url = _tmdb_image_url("https://image.tmdb.org/t/p/w1280", data, best, "backdrop_path")
+        videos = data.get("videos", {}).get("results", [])
+        trailer_url = ""
+        for v in videos:
+            if v.get("site") == "YouTube" and v.get("key") and v.get("type") in ("Trailer", "Teaser"):
+                trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
+                break
+        cast = []
+        for c in data.get("credits", {}).get("cast", [])[:8]:
+            profile_url = ("https://image.tmdb.org/t/p/w185" + c["profile_path"]) if c.get("profile_path") else ""
+            cast.append({"name": c.get("name", ""), "character": c.get("character", ""), "profile_url": profile_url})
+        genres = [g.get("name", "") for g in data.get("genres", []) if g.get("name")]
+        seasons = []
+        for s in data.get("seasons", []) or []:
+            if not s:
+                continue
+            season_poster = ("https://image.tmdb.org/t/p/w342" + s["poster_path"]) if s.get("poster_path") else ""
+            seasons.append({
+                "season_number": s.get("season_number"),
+                "name": s.get("name", ""),
+                "air_date": s.get("air_date", ""),
+                "episode_count": s.get("episode_count"),
+                "overview": s.get("overview", ""),
+                "poster_url": season_poster,
+            })
+        next_episode = data.get("next_episode_to_air") or {}
+        networks = [n.get("name", "") for n in (data.get("networks") or []) if n.get("name")]
+        director = next(
                 (c.get("name", "") for c in data.get("credits", {}).get("crew", []) if c.get("job") == "Director"),
                 ""
             )
-          return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "networks": networks, "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "director": director, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
-      except Exception:
-          return {}
+        return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "networks": networks, "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "director": director, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
+    except Exception:
+         return {}
 
 @st.cache_data(ttl=3600)
 def tmdb_fetch_details_by_id(tmdb_id: str, media_type: str, _v: int = 2) -> dict:
@@ -980,200 +1018,192 @@ def render_sidebar():
       return page, name
 
 
-  # ─────────────────────────────────────────────
-  #  PAGE: ADD ENTRY (FIX #1: UUID-based ID, Enhancement #2: duplicate detection)
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  PAGE: ADD ENTRY (FIX #1: UUID-based ID, Enhancement #2: duplicate detection)
+# ─────────────────────────────────────────────
 def page_add_entry(entries_ws, current_name: str):
-      st.subheader("Add a new entry")
-      st.caption("Fill in what you've watched — takes about 10 seconds.")
-      reset_n = st.session_state.get("_add_form_reset", 0)
+    st.subheader("Add a new entry")
+    st.caption("Fill in what you've watched — takes about 10 seconds.")
+    reset_n = st.session_state.get("_add_form_reset", 0)
 
-      # ── TMDB autofill ──────────────────────────────────────────────
-      with st.expander("🔍 Auto-fill from TMDB (optional)", expanded=False):
-          af1, af2, af3 = st.columns([4, 1, 1])
-          with af1:
-              tmdb_q = st.text_input(
-                  "Search title on TMDB",
-                  placeholder="e.g. Inception — type then click Search",
-                  key="tmdb_title_input",
-              )
-          with af2:
-              tmdb_t = st.selectbox("Type", ["Movie", "WebSeries"], key="tmdb_type_input")
-          with af3:
-              st.write("")
-              st.write("")
-              do_search = st.button("Search", key="tmdb_search_btn", use_container_width=True)
+    # ── TMDB autofill ──────────────────────────────────────────────
+    with st.expander("🔍 Auto-fill from TMDB (optional)", expanded=False):
+        af1, af2, af3 = st.columns([4, 1, 1])
+        with af1:
+            tmdb_q = st.text_input(
+                "Search title on TMDB",
+                placeholder="e.g. Inception — type then click Search",
+                key="tmdb_title_input",
+            )
+        with af2:
+            tmdb_t = st.selectbox("Type", ["Movie", "WebSeries"], key="tmdb_type_input")
+        with af3:
+            st.write("")
+            st.write("")
+            do_search = st.button("Search", key="tmdb_search_btn", use_container_width=True)
+        if do_search:
+            if tmdb_q.strip():
+                with st.spinner("Searching TMDB…"):
+                    results_list = tmdb_search(tmdb_q.strip(), tmdb_t)
+                if results_list:
+                    st.session_state["tmdb_results"]   = results_list
+                    st.session_state["tmdb_query"]     = tmdb_q.strip()
+                    st.session_state["tmdb_type_sel"]  = tmdb_t
+                    st.session_state["tmdb_sel_idx"]   = 0
+                    st.session_state.pop("tmdb_result", None)
+                else:
+                    st.warning("No results found. Try a different spelling.")
+                    st.session_state.pop("tmdb_results", None)
+            else:
+                st.warning("Please enter a title to search.")
 
-          if do_search:
-              if tmdb_q.strip():
-                  with st.spinner("Searching TMDB…"):
-                      results_list = tmdb_search(tmdb_q.strip(), tmdb_t)
-                  if results_list:
-                      st.session_state["tmdb_results"]   = results_list
-                      st.session_state["tmdb_query"]     = tmdb_q.strip()
-                      st.session_state["tmdb_type_sel"]  = tmdb_t
-                      st.session_state["tmdb_sel_idx"]   = 0
-                      st.session_state.pop("tmdb_result", None)
-                  else:
-                      st.warning("No results found. Try a different spelling.")
-                      st.session_state.pop("tmdb_results", None)
-              else:
-                  st.warning("Please enter a title to search.")
+        if "tmdb_results" in st.session_state:
+            results_list = st.session_state["tmdb_results"]
+            option_labels = [
+                f"{r['name']} ({r['year'] or '?'})" for r in results_list
+            ]
+            sel_idx = st.selectbox(
+                "Select the correct match:",
+                options=list(range(len(option_labels))),
+                format_func=lambda i: option_labels[i],
+                key="tmdb_sel_idx",
+            )
+            res = results_list[sel_idx]
+            rc1, rc2 = st.columns([1, 4])
+            with rc1:
+                if res.get("poster"):
+                    st.image(res["poster"], width=80)
+            with rc2:
+                st.info(
+                    f"**{res.get('name', '')}** ({res.get('year', '?')})  \n"
+                    f"Genres: {', '.join(res.get('genres', []))}"
+                )
+                if st.button("✅  Use this data", key="tmdb_use_btn"):
+                    st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
+                    st.session_state["pf_tmdb_id"] = res.get("id", "") 
+                    st.session_state["pf_year"]   = res.get("year", "")
+                    st.session_state["pf_genres"] = res.get("genres", [])
+                    st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
+                    st.session_state["pf_poster"] = res.get("poster", "")
 
-          if "tmdb_results" in st.session_state:
-              results_list = st.session_state["tmdb_results"]
-              option_labels = [
-                  f"{r['name']} ({r['year'] or '?'})" for r in results_list
-              ]
-              sel_idx = st.selectbox(
-                  "Select the correct match:",
-                  options=list(range(len(option_labels))),
-                  format_func=lambda i: option_labels[i],
-                  key="tmdb_sel_idx",
-              )
-              res = results_list[sel_idx]
-              rc1, rc2 = st.columns([1, 4])
-              with rc1:
-                  if res.get("poster"):
-                      st.image(res["poster"], width=80)
-              with rc2:
-                  st.info(
-                      f"**{res.get('name', '')}** ({res.get('year', '?')})  \n"
-                      f"Genres: {', '.join(res.get('genres', []))}"
-                  )
-                  if st.button("✅  Use this data", key="tmdb_use_btn"):
-                      st.session_state["pf_title"]  = res.get("name", st.session_state.get("tmdb_query", ""))
-                      st.session_state["pf_tmdb_id"] = res.get("id", "") 
-                      st.session_state["pf_year"]   = res.get("year", "")
-                      st.session_state["pf_genres"] = res.get("genres", [])
-                      st.session_state["pf_type"]   = st.session_state.get("tmdb_type_sel", "Movie")
-                      st.session_state["pf_poster"] = res.get("poster", "")
+                    # Platform + Language need the full details endpoint (search results
+                    # don't carry networks/original_language) — fetch once by ID.
+                    with st.spinner("Fetching platform & language…"):
+                        details = tmdb_fetch_details_by_id(
+                            res.get("id", ""), st.session_state.get("tmdb_type_sel", "Movie")
+                        )
+                    st.session_state["pf_platform"] = _platform_from_tmdb_networks(details.get("networks", []))
+                    st.session_state["pf_language"] = _language_from_tmdb_code(details.get("language", ""))
+                    st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
+                    st.session_state.pop("tmdb_results", None)
+                    st.rerun()
 
-                      # Platform + Language need the full details endpoint (search results
-                      # don't carry networks/original_language) — fetch once by ID.
-                      with st.spinner("Fetching platform & language…"):
-                          details = tmdb_fetch_details_by_id(
-                              res.get("id", ""), st.session_state.get("tmdb_type_sel", "Movie")
-                          )
-                      st.session_state["pf_platform"] = _platform_from_tmdb_networks(details.get("networks", []))
-                      st.session_state["pf_language"] = _language_from_tmdb_code(details.get("language", ""))
+    pf_title    = st.session_state.get("pf_title",    "")
+    pf_year     = st.session_state.get("pf_year",     "")
+    pf_genres   = st.session_state.get("pf_genres",   [])
+    pf_type     = st.session_state.get("pf_type",     "Movie")
+    pf_poster   = st.session_state.get("pf_poster",   "")
+    pf_platform = st.session_state.get("pf_platform", "")
+    pf_language = st.session_state.get("pf_language", "")
 
-                      st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
-                      st.session_state.pop("tmdb_results", None)
-                      st.rerun()
+    if pf_poster:
+        st.session_state["pending_poster"] = pf_poster
 
-      pf_title    = st.session_state.get("pf_title",    "")
-      pf_year     = st.session_state.get("pf_year",     "")
-      pf_genres   = st.session_state.get("pf_genres",   [])
-      pf_type     = st.session_state.get("pf_type",     "Movie")
-      pf_poster   = st.session_state.get("pf_poster",   "")
-      pf_platform = st.session_state.get("pf_platform", "")
-      pf_language = st.session_state.get("pf_language", "")
+    # ── Main form ───────────────────────────────────────────────────
+    with st.form("add_entry_form", clear_on_submit=False):
+        st.markdown("##### 🎬 What did you watch")
+        c1, c2 = st.columns(2)
+        with c1:
+            added_by = st.text_input(
+                "Your name *",
+                value=current_name,
+                placeholder="e.g. Pankaj",
+                key=f"add_addedby_{reset_n}",
+            )
+        with c2:
+            title = st.text_input(
+                "Title *",
+                value=pf_title,
+                placeholder="e.g. Mirzapur Season 3",
+                help="Use original title if possible.",
+                key=f"add_title_{reset_n}",
+            )
+        c3, c4, c5 = st.columns(3)
+        with c3:
+            type_opts = ["Movie", "WebSeries"]
+            type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
+            media_type = st.selectbox("Type", type_opts, index=type_idx, key=f"add_type_{reset_n}")
+        with c4:
+            platform_idx = PLATFORMS.index(pf_platform) if pf_platform in PLATFORMS else 0
+            platform = st.selectbox(
+                "Platform", PLATFORMS, index=platform_idx,
+                help="Pick the main platform where you watched it.",  key=f"add_platform_{reset_n}"
+            )
+        with c5:
+            status = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0, key=f"add_status_{reset_n}")
+        st.divider()
+        st.markdown("##### ⭐ Your experience")
+        c6, c7 = st.columns(2)
+        with c6:
+            valid_pf_g = [g for g in pf_genres if g in GENRES_LIST]
+            genre_sel  = st.multiselect(
+                "Genre",
+                options=GENRES_LIST,
+                default=valid_pf_g,
+                help="Select all genres that apply.", key=f"add_genre_{reset_n}"
+            )
+        with c7:
+            language_idx = LANGUAGES.index(pf_language) if pf_language in LANGUAGES else 0
+            language = st.selectbox("Language", LANGUAGES, index=language_idx, key=f"add_language_{reset_n}")
+        rating       = None
+        recommend    = ""
+        watched_year = datetime.now().year
 
-      if pf_poster:
-          st.session_state["pending_poster"] = pf_poster
-
-      # ── Main form ───────────────────────────────────────────────────
-      with st.form("add_entry_form", clear_on_submit=False):
-          st.markdown("##### 🎬 What did you watch")
-          c1, c2 = st.columns(2)
-          with c1:
-              added_by = st.text_input(
-                  "Your name *",
-                  value=current_name,
-                  placeholder="e.g. Pankaj",
-                  key=f"add_addedby_{reset_n}",
-              )
-          with c2:
-              title = st.text_input(
-                  "Title *",
-                  value=pf_title,
-                  placeholder="e.g. Mirzapur Season 3",
-                  help="Use original title if possible.",
-                  key=f"add_title_{reset_n}",
-              )
-
-          c3, c4, c5 = st.columns(3)
-          with c3:
-              type_opts = ["Movie", "WebSeries"]
-              type_idx  = type_opts.index(pf_type) if pf_type in type_opts else 0
-              media_type = st.selectbox("Type", type_opts, index=type_idx, key=f"add_type_{reset_n}")
-          with c4:
-              platform_idx = PLATFORMS.index(pf_platform) if pf_platform in PLATFORMS else 0
-              platform = st.selectbox(
-                  "Platform", PLATFORMS, index=platform_idx,
-                  help="Pick the main platform where you watched it.",  key=f"add_platform_{reset_n}"
-              )
-          with c5:
-              status = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0, key=f"add_status_{reset_n}")
-          
-          st.divider()
-          st.markdown("##### ⭐ Your experience")
-          c6, c7 = st.columns(2)
-          with c6:
-              valid_pf_g = [g for g in pf_genres if g in GENRES_LIST]
-              genre_sel  = st.multiselect(
-                  "Genre",
-                  options=GENRES_LIST,
-                  default=valid_pf_g,
-                  help="Select all genres that apply.", key=f"add_genre_{reset_n}"
-              )
-          with c7:
-              language_idx = LANGUAGES.index(pf_language) if pf_language in LANGUAGES else 0
-              language = st.selectbox("Language", LANGUAGES, index=language_idx, key=f"add_language_{reset_n}")
-
-          rating       = None
-          recommend    = ""
-          watched_year = datetime.now().year
-
-          if status != "Plan":
-              c8, c9, c10 = st.columns([2, 1, 1])
-              with c8:
-                  rating = st.slider("Rating (1–10)", 1, 10, 6, key=f"add_rating_{reset_n}")
-              with c9:
-                  recommend = st.radio(
-                      "Recommend?", ["Yes", "No"], horizontal=True, index=0, key=f"add_recommend_{reset_n}"
-                  ).lower()
-              with c10:
-                  min_year = 1900
-                  max_year = datetime.now().year + 1
-                  try:
-                      yr_default = int(float(pf_year)) if str(pf_year).strip() else datetime.now().year
-                  except (ValueError, TypeError):
-                      yr_default = datetime.now().year
-                  yr_default = max(min_year, min(yr_default, max_year))
-                  watched_year = st.number_input(
-                      "Year watched",
-                      min_value=min_year,
-                      max_value=max_year,
-                      value=yr_default,
-                      step=1, key=f"add_watchedyear_{reset_n}"
-                  )
-          st.divider()
-          # ENHANCEMENT #10: "Watched with" field
-          with st.expander("➕ Extra details (watched with, review)", expanded=False):
+        if status != "Plan": 
+            c8, c9, c10 = st.columns([2, 1, 1])
+            with c8:
+                rating = st.slider("Rating (1–10)", 1, 10, 6, key=f"add_rating_{reset_n}")
+            with c9:
+                recommend = st.radio(
+                    "Recommend?", ["Yes", "No"], horizontal=True, index=0, key=f"add_recommend_{reset_n}"
+                ).lower()
+            with c10:
+                min_year = 1900
+                max_year = datetime.now().year + 1
+                try:
+                    yr_default = int(float(pf_year)) if str(pf_year).strip() else datetime.now().year
+                except (ValueError, TypeError):
+                    yr_default = datetime.now().year
+                yr_default = max(min_year, min(yr_default, max_year))
+                watched_year = st.number_input(
+                    "Year watched",
+                    min_value=min_year,
+                    max_value=max_year,
+                    value=yr_default,
+                    step=1, key=f"add_watchedyear_{reset_n}"
+                )
+        st.divider()
+        # ENHANCEMENT #10: "Watched with" field
+        with st.expander("➕ Extra details (watched with, review)", expanded=False):
             watched_with = st.text_input(
-              "Watched with (optional)",
-              placeholder="e.g. Rohan, Priya",
-              help="Who did you watch this with?", key=f"add_watchedwith_{reset_n}"
+            "Watched with (optional)", placeholder="e.g. Rohan, Priya",
+            help="Who did you watch this with?", key=f"add_watchedwith_{reset_n}"
             )
             comments = st.text_area("Review / comments", "", label_visibility="collapsed", key=f"add_comments_{reset_n}")
+        submitted = st.form_submit_button(
+            "💾 Save entry", use_container_width=True, type="primary"
+        )
+    if submitted:
+        errors = []
+        if not added_by.strip():
+            errors.append("Your name is required.")
+        if not title.strip():
+            errors.append("Title is required.")
 
-          submitted = st.form_submit_button(
-              "💾 Save entry", use_container_width=True, type="primary"
-          )
-
-      if submitted:
-          errors = []
-          if not added_by.strip():
-              errors.append("Your name is required.")
-          if not title.strip():
-              errors.append("Title is required.")
-          if errors:
-              for e in errors:
-                  st.error(e)
-          else:
-              # ENHANCEMENT #2: Duplicate detection
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
             dup_key = f"confirm_duplicate_{title.strip().lower()}"
             try:
                 existing_df = read_entries(entries_ws)
@@ -1181,19 +1211,19 @@ def page_add_entry(entries_ws, current_name: str):
 
                 if not duplicates.empty and not st.session_state.get(dup_key):
                     dup_by = duplicates.iloc[0].get("added_by", "someone")
+
                     @st.dialog("Possible duplicate")
                     def confirm_dup():
                         st.write(f"'{title.strip()}' was already logged by **{dup_by}**.")
-
                         d1, d2 = st.columns(2)
                         with d1:
                             if st.button("Add anyway", type="primary", use_container_width=True):
                                 st.session_state[dup_key] = True
                                 st.rerun()
-
                         with d2:
                             if st.button("Cancel", use_container_width=True):
                                 st.rerun()
+
                     confirm_dup()
                     st.stop()
 
@@ -1201,54 +1231,48 @@ def page_add_entry(entries_ws, current_name: str):
                 existing_df = empty_df()
                 st.session_state.pop(dup_key, None)
 
-          if added_by.strip():
-                  st.session_state["user_name"]  = added_by.strip()
-                  st.session_state["voter_name"] = added_by.strip()
+            if added_by.strip():
+                st.session_state["user_name"] = added_by.strip()
+                st.session_state["voter_name"] = added_by.strip()
+                poster_url = st.session_state.pop("pending_poster", "")
+                next_id = int(time.time() * 1000)
 
-      poster_url = st.session_state.pop("pending_poster", "")
+                row = {
+                    "entry_id": next_id,
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "added_by": added_by.strip(),
+                    "title": title.strip(),
+                    "type": media_type.lower(),
+                    "genre": ", ".join(genre_sel) if genre_sel else "",
+                    "platform": platform.strip(),
+                    "status": status.lower(),
+                    "rating": rating if rating is not None else "",
+                    "recommend": recommend if status != "Plan" else "",
+                    "watched_year": watched_year if status != "Plan" else "",
+                    "language": language,
+                    "comments": comments.strip() if comments else "",
+                    "poster_url": poster_url,
+                    "watched_with": watched_with.strip() if watched_with else "",
+                    "tmdb_id": st.session_state.get("pf_tmdb_id", ""),
+                }
 
-# FIX entry_id: 13-digit epoch ms, safe from scientific notation in Sheets
-      next_id = int(time.time() * 1000)
-
-      row = {
-                  "entry_id":     next_id,
-                  "timestamp":    datetime.now().isoformat(timespec="seconds"),
-                  "added_by":     added_by.strip(),
-                  "title":        title.strip(),
-                  "type":         media_type.lower(),  # FIX #2: store lowercase
-                  "genre":        ", ".join(genre_sel) if genre_sel else "",
-                  "platform":     platform.strip(),
-                  "status":       status.lower(),  # FIX #2: store lowercase
-                  "rating":       rating if rating is not None else "",
-                  "recommend":    recommend if status != "Plan" else "",
-                  "watched_year": watched_year if status != "Plan" else "",
-                  "language":     language,
-                  "comments":     comments.strip() if comments else "",
-                  "poster_url":   poster_url,
-                  "watched_with": watched_with.strip() if watched_with else "",
-                  "tmdb_id": st.session_state.get("pf_tmdb_id", ""),
-              }
-              try:
+                try:
                     append_row(entries_ws, row)
                     read_entries.clear()
 
-                    # existing cleanup — TMDB autofill keys
                     for k in ["pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"]:
                         st.session_state.pop(k, None)
 
-                    # C5 — clear the per-title duplicate confirmation flag
                     st.session_state.pop(dup_key, None)
-                    # new — force widget reset since clear_on_submit is now False
                     st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
-
                     st.success(f'"{title.strip()}" saved! Add another below.')
-              except Exception as e:
-                        st.error(f"Error saving entry: {e}")
+                except Exception as e:
+                    st.error(f"Error saving entry: {e}")
 
 
-  # ─────────────────────────────────────────────
-  #  PAGE: BROWSE (FIX #4: pagination reset, FIX #5: stable picks, Enhancement #3: sort)
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  PAGE: BROWSE (FIX #4: pagination reset, FIX #5: stable picks, Enhancement #3: sort)
+# ─────────────────────────────────────────────
 def render_stats_grid(stats):
     st.markdown("""
     <style>
@@ -1371,242 +1395,260 @@ def _stable_daily_picks(pool_df: pd.DataFrame, date_str: str, n: int) -> pd.Data
     chosen = set(ranked[:n])
     return pool_df[ids.isin(chosen)]
 
-
 def page_browse(entries_ws, votes_ws):
-      st.markdown("""
-      <style>
-      .browse-toolbar div[data-testid="stHorizontalBlock"] {align-items:end; gap:0.5rem;}
-      @media (max-width: 768px) { .browse-toolbar div[data-testid="stHorizontalBlock"] {gap:0.45rem;} }
-      </style>
-      """, unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .browse-toolbar div[data-testid="stHorizontalBlock"] {align-items:end; gap:0.5rem;}
+    @media (max-width: 768px) { .browse-toolbar div[data-testid="stHorizontalBlock"] {gap:0.45rem;} }
+    </style>
+    """, unsafe_allow_html=True)
 
-      search_text = st.session_state.get("browse_search", "")
+    search_text = st.session_state.get("browse_search", "")
 
-      with st.spinner(""):
+    with st.spinner(""):
         ph = st.empty()
         ph.markdown('<div style="display:flex;gap:14px;"><div style="height:100px;width:100%;background:var(--surface-2);border-radius:12px;animation:pulse 1.5s infinite;"></div></div><style>@keyframes pulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}</style>', unsafe_allow_html=True)
         df = read_entries(entries_ws)
         votes_df = read_votes(votes_ws)
         ph.empty()
-      vote_summary = build_vote_summary(votes_df)
+    vote_summary = build_vote_summary(votes_df)
 
-      selected_entry_id = st.session_state.get("selected_entry_id")
-      if selected_entry_id is not None:
-          sel_str = _normalize_entry_id(selected_entry_id)
-          df_copy = df.copy()
-          df_copy["_eid_str"] = df_copy["entry_id"].apply(_normalize_entry_id)
-          selected_df = df_copy[df_copy["_eid_str"] == sel_str].drop(columns=["_eid_str"])
-          if selected_df.empty:
-              sel_title = str(st.session_state.get("selected_entry_title", "") or "").strip().lower()
-              sel_type = str(st.session_state.get("selected_entry_type", "") or "").strip().lower()
-              if sel_title:
-                  title_mask = df["title"].astype(str).str.strip().str.lower() == sel_title
-                  if sel_type and "type" in df.columns:
-                      type_mask = df["type"].astype(str).str.strip().str.lower() == sel_type
-                      selected_df = df[title_mask & type_mask]
-                  else:
-                      selected_df = df[title_mask]
-          if not selected_df.empty:
-              render_entry_detail(selected_df.iloc[0], vote_summary)
-              return
-          _clear_detail_view_state()
+    selected_entry_id = st.session_state.get("selected_entry_id")
+    if selected_entry_id is not None:
+        sel_str = _normalize_entry_id(selected_entry_id)
+        df_copy = df.copy()
+        df_copy["_eid_str"] = df_copy["entry_id"].apply(_normalize_entry_id)
+        selected_df = df_copy[df_copy["_eid_str"] == sel_str].drop(columns=["_eid_str"])
+        if selected_df.empty:
+            sel_title = str(st.session_state.get("selected_entry_title", "") or "").strip().lower()
+            sel_type = str(st.session_state.get("selected_entry_type", "") or "").strip().lower()
+            if sel_title:
+                title_mask = df["title"].astype(str).str.strip().str.lower() == sel_title
+                if sel_type and "type" in df.columns:
+                    type_mask = df["type"].astype(str).str.strip().str.lower() == sel_type
+                    selected_df = df[title_mask & type_mask]
+                else:
+                    selected_df = df[title_mask]
+        if not selected_df.empty:
+            render_entry_detail(selected_df.iloc[0], vote_summary)
+            return
+        _clear_detail_view_state()
 
-      if df.empty:
-          st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
-          return
+    if df.empty:
+        st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
+        return
 
-      st.divider()
+    st.divider()
 
-      # ── ENHANCEMENT #4: Activity feed ─────────────────────────────
-      if "timestamp" in df.columns:
-          recent = df.dropna(subset=["timestamp"]).sort_values("timestamp", ascending=False).head(3)
-          if not recent.empty:
-              activity_parts = []
-              for _, r in recent.iterrows():
-                  ago = _time_ago(r["timestamp"])
-                  activity_parts.append(f"**{html.escape(str(r.get('title','')))}** by {html.escape(str(r.get('added_by','')))} ({ago})")
-              st.markdown("🆕 Recently added: " + " · ".join(activity_parts))
+    # ── ENHANCEMENT #4: Activity feed ─────────────────────────────
+    if "timestamp" in df.columns:
+        recent = df.dropna(subset=["timestamp"]).sort_values("timestamp", ascending=False).head(3)
+        if not recent.empty:
+            activity_parts = []
+            for _, r in recent.iterrows():
+                ago = _time_ago(r["timestamp"])
+                activity_parts.append(f"**{html.escape(str(r.get('title','')))}** by {html.escape(str(r.get('added_by','')))} ({ago})")
+            st.markdown("🆕 Recently added: " + " · ".join(activity_parts))
 
-      # ── FIX #5: Tonight's picks — stable for the day ──────────────
-      voter_name = st.session_state.get("voter_name", "").strip()
-      if all(c in df.columns for c in ["recommend", "status", "rating"]):
-          top_pool = df[
-              (df["status"].str.lower() == "watched") &
-              (df["recommend"].str.lower() == "yes") &
-              (pd.to_numeric(df["rating"], errors="coerce") >= 8)
-          ]
-          if voter_name and "added_by" in top_pool.columns:
-              top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
+    # ── FIX #5: Tonight's picks — stable for the day ──────────────
+    voter_name = st.session_state.get("voter_name", "").strip()
+    if all(c in df.columns for c in ["recommend", "status", "rating"]):
+        top_pool = df[
+            (df["status"].str.lower() == "watched") &
+            (df["recommend"].str.lower() == "yes") &
+            (pd.to_numeric(df["rating"], errors="coerce") >= 8)
+        ]
+        if voter_name and "added_by" in top_pool.columns:
+            top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
-          if not top_pool.empty:
-              st.markdown("### 🍿 Tonight's picks")
-              st.caption("Top-rated, community-recommended picks (stable for today).")
-              sample_size = min(3, len(top_pool))
-              # FIX #5 / M2: deterministic by entry_id + date, independent of row order
-              today_str = datetime.now().strftime("%Y%m%d")
-              picks = _stable_daily_picks(top_pool, today_str, sample_size)
-              pcols = st.columns(sample_size)
-              for i, (_, pr) in enumerate(picks.iterrows()):
-                  with pcols[i]:
-                      poster = pr.get("poster_url", "") or ""
-                      if poster:
-                          st.image(poster, width=70)
-                      st.markdown(
-                          f"**{html.escape(str(pr.get('title','–')))}**  \n"
-                          f"{platform_badge(pr.get('platform',''))} &nbsp; "
-                          f"{rating_stars(pr.get('rating'))}",
-                          unsafe_allow_html=True,
-                      )
-                      pick_eid = _normalize_entry_id(pr.get("entry_id", ""))
-                      if st.button("View Details", key=f"tonight_view_{pick_eid}_{i}", use_container_width=True):
-                          st.session_state["selected_entry_id"] = pick_eid
-                          st.session_state["selected_entry_title"] = str(pr.get("title", "") or "").strip()
-                          st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
-                          st.rerun()
-              st.divider()
+        if not top_pool.empty:
+            st.markdown("### 🍿 Tonight's picks")
+            st.caption("Top-rated, community-recommended picks (stable for today).")
+            sample_size = min(3, len(top_pool))
+            # FIX #5 / M2: deterministic by entry_id + date, independent of row order
+            today_str = datetime.now().strftime("%Y%m%d")
+            picks = _stable_daily_picks(top_pool, today_str, sample_size)
+            pcols = st.columns(sample_size)
+            for i, (_, pr) in enumerate(picks.iterrows()):
+                with pcols[i]:
+                    poster = pr.get("poster_url", "") or ""
+                    if poster:
+                        st.image(poster, width=70)
+                    st.markdown(
+                        f"**{html.escape(str(pr.get('title','–')))}**  \n"
+                        f"{platform_badge(pr.get('platform',''))} &nbsp; "
+                        f"{rating_stars(pr.get('rating'))}",
+                        unsafe_allow_html=True,
+                    )
+                    pick_eid = _normalize_entry_id(pr.get("entry_id", ""))
+                    if st.button("View Details", key=f"tonight_view_{pick_eid}_{i}", use_container_width=True):
+                        st.session_state["selected_entry_id"] = pick_eid
+                        st.session_state["selected_entry_title"] = str(pr.get("title", "") or "").strip()
+                        st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
+                        st.rerun()
+            st.divider()
+    with st.expander("🔎 Filters & Sort", expanded=False):
+        fc0a, fc0b = st.columns(2)
+        with fc0a:
+            preset = st.selectbox(
+                "Quick filter",
+                ["All", "Recommended only", "High ratings (8+)", "Plan to Watch"],
+                key="browse_preset",
+            )
+        with fc0b:
+            show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
 
-      with st.expander("🔍 Filters & Sort", expanded=False):
-          fc0a, fc0b = st.columns(2)
-          with fc0a:
-              preset = st.selectbox("Quick filter", ["All", "Recommended only", "High ratings (8+)", "Plan to Watch"], key="browse_preset")
-          with fc0b:
-              show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
-          my_name = st.session_state.get("username", "").strip()
-          sort_choice = st.selectbox("Sort by", list(SORT_OPTIONS.keys()), index=0, key="sort_select")
-          fc1, fc2, fc3, fc4, fc5 = st.columns(5)  
-          with fc1: plat_f = st.multiselect("Platform", plat_opts, key="f_plat")
-          with fc2: type_f = st.multiselect("Type", type_opts2, key="f_type")
-          with fc3: stat_f = st.multiselect("Status", stat_opts, key="f_stat")
-          with fc4: rec_f = st.multiselect("Rec", rec_opts, key="f_rec")
-          with fc5: genre_f = st.multiselect("Genre", all_genres, key="f_genre")
-      active_count = sum([bool(plat_f), bool(type_f), bool(stat_f), bool(rec_f), bool(genre_f), preset != "All", show_mine])
-      if active_count:
-        st.caption(f"🔧 {active_count} filter(s) active")
+        my_name = st.session_state.get("username", "").strip()
+        sort_choice = st.selectbox("Sort by", list(SORT_OPTIONS.keys()), index=0, key="sort_select")
+
+        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+        with fc1:
+            plat_f = st.multiselect("Platform", PLATFORMS, key="f_plat")
+        with fc2:
+            type_f = st.multiselect("Type", ["movie", "webseries"], key="f_type")
+        with fc3:
+            stat_f = st.multiselect("Status", ["watched", "watching", "plan"], key="f_stat")
+        with fc4:
+            rec_f = st.multiselect("Rec", ["yes", "no"], key="f_rec")
+        with fc5:
+            genre_f = st.multiselect("Genre", GENRES_LIST, key="f_genre")
+
+        active_count = sum([
+            bool(plat_f),
+            bool(type_f),
+            bool(stat_f),
+            bool(rec_f),
+            bool(genre_f),
+            preset != "All",
+            show_mine,
+        ])
+        if active_count:
+            st.caption(f"🔧 {active_count} filter(s) active")
 
       # ── Apply filters ──────────────────────────────────────────────
-      filtered = df.copy()
+    filtered = df.copy()
 
-      if preset == "Recommended only":
-          filtered = filtered[filtered.get("recommend", pd.Series(dtype=str)).str.lower() == "yes"]
-      elif preset == "High ratings (≥ 8)":
-          if "rating" in filtered.columns:
-              filtered = filtered[pd.to_numeric(filtered["rating"], errors="coerce") >= 8]
-      elif preset == "Plan to Watch":
-          # ENHANCEMENT #5: quick filter for Plan entries
-          filtered = filtered[filtered["status"].str.lower() == "plan"]
+    if preset == "Recommended only":
+        filtered = filtered[filtered.get("recommend", pd.Series(dtype=str)).str.lower() == "yes"]
+    elif preset == "High ratings (≥ 8)":
+        if "rating" in filtered.columns:
+            filtered = filtered[pd.to_numeric(filtered["rating"], errors="coerce") >= 8]
+    elif preset == "Plan to Watch":
+        # ENHANCEMENT #5: quick filter for Plan entries
+        filtered = filtered[filtered["status"].str.lower() == "plan"]
 
-      if show_mine and my_name:
-          filtered = filtered[filtered["added_by"].str.strip().str.lower() == my_name.lower()]
-      if search_text:
-          filtered = filtered[filtered["title"].str.contains(search_text, case=False, na=False, regex=False)]
-      if plat_f and "platform" in filtered.columns:
-          filtered = filtered[filtered["platform"].isin(plat_f)]
-      if type_f and "type" in filtered.columns:
-          filtered = filtered[filtered["type"].isin(type_f)]
-      if stat_f and "status" in filtered.columns:
-          filtered = filtered[filtered["status"].isin(stat_f)]
-      if rec_f and "recommend" in filtered.columns:
-          filtered = filtered[filtered["recommend"].isin(rec_f)]
-      if genre_f and "genre" in filtered.columns:
-          filtered = filtered[
-              filtered["genre"].apply(
-                  lambda g: any(
-                      sel.lower() in [x.strip().lower() for x in str(g).split(",")]
-                      for sel in genre_f
-                  )
-              )
-          ]
+    if show_mine and my_name:
+        filtered = filtered[filtered["added_by"].str.strip().str.lower() == my_name.lower()]
+    if search_text:
+        filtered = filtered[filtered["title"].str.contains(search_text, case=False, na=False, regex=False)]
+    if plat_f and "platform" in filtered.columns:
+        filtered = filtered[filtered["platform"].isin(plat_f)]
+    if type_f and "type" in filtered.columns:
+        filtered = filtered[filtered["type"].isin(type_f)]
+    if stat_f and "status" in filtered.columns:
+        filtered = filtered[filtered["status"].isin(stat_f)]
+    if rec_f and "recommend" in filtered.columns:
+        filtered = filtered[filtered["recommend"].isin(rec_f)]
+    if genre_f and "genre" in filtered.columns:
+        filtered = filtered[
+            filtered["genre"].apply(
+                lambda g: any(
+                    sel.lower() in [x.strip().lower() for x in str(g).split(",")]
+                    for sel in genre_f
+                )
+            )
+        ]
 
-      # ENHANCEMENT #3: Apply sort
-      sort_col, sort_asc = SORT_OPTIONS[sort_choice]
-      if sort_col == "_total_votes":
-          def _safe_eid(eid):
+# ENHANCEMENT #3: Apply sort
+    sort_col, sort_asc = SORT_OPTIONS[sort_choice]
+    if sort_col == "_total_votes":
+        def _safe_eid(eid):
             v = pd.to_numeric(eid, errors="coerce")
             return int(v) if pd.notna(v) else None
-          filtered["_total_votes"] = filtered["entry_id"].apply(
+        filtered["_total_votes"] = filtered["entry_id"].apply(
             lambda eid: sum(vote_summary.get(_safe_eid(eid), {"yes": 0, "no": 0}).values())
-          )
-          filtered = filtered.sort_values("_total_votes", ascending=sort_asc).drop(columns=["_total_votes"])
-      elif sort_col == "rating" and "rating" in filtered.columns:
-          filtered["_rating_num"] = pd.to_numeric(filtered["rating"], errors="coerce").fillna(0)
-          filtered = filtered.sort_values("_rating_num", ascending=sort_asc).drop(columns=["_rating_num"])
-      elif sort_col in filtered.columns:
-          filtered = filtered.sort_values(sort_col, ascending=sort_asc, na_position="last")
+        )
+        filtered = filtered.sort_values("_total_votes", ascending=sort_asc).drop(columns=["_total_votes"])
+    elif sort_col == "rating" and "rating" in filtered.columns:
+        filtered["_rating_num"] = pd.to_numeric(filtered["rating"], errors="coerce").fillna(0)
+        filtered = filtered.sort_values("_rating_num", ascending=sort_asc).drop(columns=["_rating_num"])
+    elif sort_col in filtered.columns:
+        filtered = filtered.sort_values(sort_col, ascending=sort_asc, na_position="last")
 
       # FIX #4: Detect filter changes and reset pagination
-      current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{sort_choice}"
-      if st.session_state.get("_last_filter_sig") != current_filter_sig:
-          st.session_state["_last_filter_sig"] = current_filter_sig
-          for k in list(st.session_state.keys()):
-              if k.startswith("browse_page_"):
-                  st.session_state[k] = 1
+    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{sort_choice}"
+    if st.session_state.get("_last_filter_sig") != current_filter_sig:
+        st.session_state["_last_filter_sig"] = current_filter_sig
+        for k in list(st.session_state.keys()):
+            if k.startswith("browse_page_"):
+                st.session_state[k] = 1
 
-      total = len(df)
-      st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
+    total = len(df)
+    st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
-      st.divider()
-      PAGINATION_CSS = """<style>
-      .pagination-wrap button {
+    st.divider()
+    PAGINATION_CSS = """<style>
+    .pagination-wrap button {
         border-radius: 999px !important;
         border: 1px solid var(--border) !important;
         background: var(--surface-2) !important;
         font-weight: 600 !important;
         }
-      .pagination-wrap button:hover:not(:disabled) {
+    .pagination-wrap button:hover:not(:disabled) {
         border-color: var(--accent) !important;
         background: var(--accent-soft) !important;
         }
         </style>"""
-      # -- Pagination + render helper (FIX #9: explicit params)
-      def _paginate_render(tab_df, tab_key, v_mode, v_summary, v_df, v_ws):
-          t_total = len(tab_df)
-          t_pages = max(1, (t_total + PAGE_SIZE - 1) // PAGE_SIZE)
-          pg_key  = "browse_page_" + tab_key
-          if pg_key not in st.session_state:
-              st.session_state[pg_key] = 1
-          st.session_state[pg_key] = min(st.session_state[pg_key], t_pages)
-          page_start = (st.session_state[pg_key] - 1) * PAGE_SIZE
-          page_data  = tab_df.iloc[page_start : page_start + PAGE_SIZE]
-          if t_pages > 1:
-              st.markdown(PAGINATION_CSS, unsafe_allow_html=True)
-              st.markdown('<div class="pagination-wrap">', unsafe_allow_html=True)
-              pg1, pg2, pg3 = st.columns([1, 3, 1])
-              with pg1:
-                  if st.button("◄ Prev", disabled=st.session_state[pg_key] <= 1,
-                               key="prev_" + tab_key):
-                      st.session_state[pg_key] -= 1
-                      st.rerun()
-              with pg2:
-                  st.markdown(
-                      "<div style='text-align:center;color:#9ca3af;font-size:0.85rem;"
-                      "padding-top:6px;'>Page " + str(st.session_state[pg_key]) +
-                      " of " + str(t_pages) + "</div>",
-                      unsafe_allow_html=True,
-                  )
-              with pg3:
-                  if st.button("Next ►", disabled=st.session_state[pg_key] >= t_pages,
-                               key="next_" + tab_key):
-                      st.session_state[pg_key] += 1
-                      st.rerun()
-              st.markdown('</div>', unsafe_allow_html=True)
+    # -- Pagination + render helper (FIX #9: explicit params)
+    def _paginate_render(tab_df, tab_key, v_mode, v_summary, v_df, v_ws):
+        t_total = len(tab_df)
+        t_pages = max(1, (t_total + PAGE_SIZE - 1) // PAGE_SIZE)
+        pg_key  = "browse_page_" + tab_key
+        if pg_key not in st.session_state:
+            st.session_state[pg_key] = 1
+        st.session_state[pg_key] = min(st.session_state[pg_key], t_pages)
+        page_start = (st.session_state[pg_key] - 1) * PAGE_SIZE
+        page_data  = tab_df.iloc[page_start : page_start + PAGE_SIZE]
+        if t_pages > 1:
+            st.markdown(PAGINATION_CSS, unsafe_allow_html=True)
+            st.markdown('<div class="pagination-wrap">', unsafe_allow_html=True)
+            pg1, pg2, pg3 = st.columns([1, 3, 1])
+            with pg1:
+                if st.button("◄ Prev", disabled=st.session_state[pg_key] <= 1,
+                    key="prev_" + tab_key):
+                    st.session_state[pg_key] -= 1
+                    st.rerun()
+            with pg2:
+                st.markdown(
+                    "<div style='text-align:center;color:#9ca3af;font-size:0.85rem;"
+                    "padding-top:6px;'>Page " + str(st.session_state[pg_key]) +
+                    " of " + str(t_pages) + "</div>",
+                    unsafe_allow_html=True,
+                )
+            with pg3:
+                if st.button("Next ►", disabled=st.session_state[pg_key] >= t_pages,
+                    key="next_" + tab_key):
+                    st.session_state[pg_key] += 1
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-          if v_mode == "Cards":
-              _render_cards(page_data, v_summary, v_df, v_ws, entries_ws, render_scope=tab_key)
-          else:
-              _render_table(page_data, v_summary)
+        if v_mode == "Cards":
+            _render_cards(page_data, v_summary, v_df, v_ws, entries_ws, render_scope=tab_key)
+        else:
+            _render_table(page_data, v_summary)
 
-      movies_df = filtered[filtered["type"].str.strip().str.lower() == "movie"] if "type" in filtered.columns else filtered.iloc[0:0]
-      series_df = filtered[filtered["type"].str.strip().str.lower() == "webseries"] if "type" in filtered.columns else filtered.iloc[0:0]
+    movies_df = filtered[filtered["type"].str.strip().str.lower() == "movie"] if "type" in filtered.columns else filtered.iloc[0:0]
+    series_df = filtered[filtered["type"].str.strip().str.lower() == "webseries"] if "type" in filtered.columns else filtered.iloc[0:0]
 
-      tab_all, tab_movies, tab_series = st.tabs(["🎬 All", "🎥 Movies", "📺 Web Series"])
-      with tab_all:
+    tab_all, tab_movies, tab_series = st.tabs(["🎬 All", "🎥 Movies", "📺 Web Series"])
+    with tab_all:
           _paginate_render(filtered, "all", "Cards", vote_summary, votes_df, votes_ws)
-      with tab_movies:
+    with tab_movies:
           if movies_df.empty:
               st.info("No movies match the current filters.")
           else:
               _paginate_render(movies_df, "movies", "Cards", vote_summary, votes_df, votes_ws)
-      with tab_series:
+    with tab_series:
           if series_df.empty:
               st.info("No web series match the current filters.")
           else:
@@ -1904,9 +1946,9 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
       </style>"""
         # Vote + Edit/Delete row
       with st.expander("Vote / Manage", expanded=False):
-            render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope)
+            _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope)
             if current_user and current_user.lower() == row.get("added_by", "").strip().lower():
-                render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
+                _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
 
       st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
