@@ -1912,9 +1912,9 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
   <div style="display:flex;justify-content:space-between;align-items:flex-start;">
     <div>
       <span class="wlog-card-title">{title_txt}</span>
-      <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+      <span class="wlog-card-meta">{type_txt} ·  - {genre_txt}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+    <div style="display:flex;align-items:center;gap:5px;"> - {platform_html}</div>
   </div>
   <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
     {rating_html} {recommend_html} {status_html}
@@ -2225,16 +2225,46 @@ def main():
         label_visibility="collapsed",
     )
     st.session_state["browse_search"] = gs
-    st.title("🎬 What Am I Watching?")
+    st.markdown("""
+<style>
+.compact-home h1 {
+    font-size: 2.7rem !important;
+    line-height: 1.05 !important;
+    margin: 0 0 0.2rem 0 !important;
+}
+.compact-home p {
+    margin: 0 !important;
+}
+.compact-home {
+    padding: 0.1rem 0 0.35rem 0;
+}
+.compact-tip {
+    padding: 0.55rem 0.8rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px;
+    margin: 0.45rem 0 0.35rem 0;
+    background: rgba(255, 255, 255, 0.02);
+}
+div[data-testid="stTextInput"] {
+    margin-bottom: 0.35rem;
+}
+</style>
+""", unsafe_allow_html=True)
+    username = st.session_state.get("username", "").strip()
+    st.markdown('<div class="compact-home">', unsafe_allow_html=True)
+    st.markdown("# 🎬 What Am I Watching?")
     st.caption("A shared log for movies & web series across all OTT platforms. ")
     if st.session_state.get("username"):
         st.caption(f"👤 Logged in as **{st.session_state['username']}**")
+    st.markdown("</div>", unsafe_allow_html=True)
     if not st.session_state.get("onboarded"):
+        st.markdown('<div class="compact-tip">', unsafe_allow_html=True)
         with st.container(border=True):
             st.markdown("**New here?** 1) Log what you watch in **Add Entry** → 2) Browse & vote on friends' picks → 3) Check **View Details on each card** for Trailer, Cast and more info")
             if st.button("Got it", key="dismiss_onboarding"):
                 st.session_state["onboarded"] = True
                 st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
     result, err = get_sheets_safe()
     if err:
         st.error(f"⚠ App cannot start: {err}")
