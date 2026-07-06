@@ -10,6 +10,100 @@ import html
 import time
 import hashlib
 
+GLOBAL_TOKENS_CSS = """<style>
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&f[]=general-sans@400,500,600&display=swap');
+html, body, [class*="css"] { font-family: 'General Sans', sans-serif; }
+.detail-title, .stat-value { font-family: 'Cabinet Grotesk', sans-serif; }
+:root {
+  /* Surfaces */
+  --bg:            #0b0f17;
+  --surface:       #11161f;
+  --surface-2:     #161c27;
+  --surface-3:     #1c2330;
+  --border:        rgba(148,163,184,0.14);
+  --border-strong: rgba(148,163,184,0.28);
+
+  /* Text */
+  --text:          #f1f5f9;
+  --text-muted:    #a3adc2;
+  --text-faint:    #6b7789;
+
+  /* Accent */
+  --accent:        #7c3aed;
+  --accent-hover:  #6d28d9;
+  --accent-soft:   rgba(124,58,237,0.14);
+
+  /* Status */
+  --success:       #22c55e;
+  --warning:       #f97316;
+  --info:          #3b82f6;
+  --danger:        #ef4444;
+  --neutral:       #94a3b8;
+
+  /* Radius / Shadow */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.24);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.32);
+  --shadow-lg: 0 20px 50px rgba(0,0,0,0.40);
+
+  /* Motion */
+  --ease: cubic-bezier(0.16,1,0.3,1);
+  --transition: all 0.18s var(--ease);
+}
+
+/* Focus visibility for keyboard users (accessibility fix) */
+button:focus-visible, [role="button"]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
+  border-radius: var(--radius-sm) !important;
+}
+</style>
+"""
+MOBILE_CSS = """
+<style>
+/* ---- Cards: stack poster above content on narrow screens ---- */
+@media (max-width: 600px) {
+    .wlog-card img {
+        width: 46px !important;
+        height: 68px !important;
+    }
+    .wlog-card-title { font-size: 0.92rem !important; }
+    .wlog-card-meta { font-size: 0.7rem !important; }
+}
+
+/* ---- Detail hero: stack poster + content vertically ---- */
+@media (max-width: 768px) {
+    .detail-hero { min-height: unset !important; }
+    .detail-content > div[style*="display:flex"] {
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center;
+    }
+    .detail-poster { width: 160px !important; margin: 0 auto; }
+    .detail-title { font-size: 1.7rem !important; text-align: center; }
+    .hero-meta-grid { justify-content: center; }
+    .hero-actions {
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+    .hero-action-btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---- Filter toolbar: collapse 5 columns into stacked full-width ---- */
+@media (max-width: 768px) {
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+}
+</style>
+"""
+
   # ─────────────────────────────────────────────
   #  CONFIG
   # ─────────────────────────────────────────────
@@ -160,6 +254,19 @@ def tmdb_search(title: str, media_type: str, _v: int = 2) -> list:
       except Exception:
           return []
 
+def tmdb_get_with_retry(url, params, timeout, retries=1):
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+            return r
+        except Exception as e:
+            last_exc = e
+            if attempt < retries:
+                time.sleep(0.6)
+    raise last_exc
+
 def _tmdb_image_url(size_url_base: str, primary: dict, fallback: dict, key: str) -> str:
     """Flatten nested ternary poster/backdrop fallback chains (M11)."""
     if primary.get(key):
@@ -175,7 +282,7 @@ def tmdb_fetch_details(title: str, media_type: str, _v: int = 2) -> dict:
           return {}
       t = "tv" if media_type == MEDIA_TYPE_SERIES else "movie"
       try:
-          sr = requests.get(f"{TMDB_BASE}/search/{t}", params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1}, timeout=6)
+          sr = tmdb_get_with_retry(f"{TMDB_BASE}/search/{t}", params={"api_key": key, "query": title.strip(), "language": "en-US", "page": 1}, timeout=6)
           sr.raise_for_status()
           results = sr.json().get("results", [])
           if not results:
@@ -184,7 +291,7 @@ def tmdb_fetch_details(title: str, media_type: str, _v: int = 2) -> dict:
           tmdb_id = best.get("id")
           if not tmdb_id:
               return {}
-          dr = requests.get(f"{TMDB_BASE}/{t}/{tmdb_id}", params={"api_key": key, "language": "en-US", "append_to_response": "credits,videos"}, timeout=8)
+          dr = tmdb_get_with_retry(f"{TMDB_BASE}/{t}/{tmdb_id}", params={"api_key": key, "language": "en-US", "append_to_response": "credits,videos"}, timeout=8)
           dr.raise_for_status()
           data = dr.json()
           poster_url = _tmdb_image_url("https://image.tmdb.org/t/p/w342", data, best, "poster_path")
@@ -291,7 +398,7 @@ def tmdb_fetch_details_by_id(tmdb_id: str, media_type: str, _v: int = 2) -> dict
   # ─────────────────────────────────────────────
 DETAIL_CSS = """
 <style>
-.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}.hero-meta-grid{display:flex;gap:32px;flex-wrap:wrap;margin-top:18px;margin-bottom:20px}.hero-meta-col{min-width:80px}.hero-meta-label{color:#94a3b8;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}.hero-meta-value{color:#f1f5f9;font-size:.97rem;font-weight:600;line-height:1.3}.hero-action-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:all .18s}.hero-action-primary{background:#7c3aed;color:#fff}.hero-action-primary:hover{background:#6d28d9}.hero-action-secondary{background:rgba(255,255,255,.10);color:#f1f5f9;border:1px solid rgba(255,255,255,.16)}.hero-action-secondary:hover{background:rgba(255,255,255,.18)}.hero-actions{display:flex;flex-direction:column;gap:10px;min-width:220px;margin-top:10px}
+.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#cbd5e1;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}.hero-meta-grid{display:flex;gap:32px;flex-wrap:wrap;margin-top:18px;margin-bottom:20px}.hero-meta-col{min-width:80px}.hero-meta-label{color:#94a3b8;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}.hero-meta-value{color:#f1f5f9;font-size:.97rem;font-weight:600;line-height:1.3}.hero-action-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:all .18s}.hero-action-primary{background:#7c3aed;color:#fff}.hero-action-primary:hover{background:#6d28d9}.hero-action-secondary{background:rgba(255,255,255,.10);color:#f1f5f9;border:1px solid rgba(255,255,255,.16)}.hero-action-secondary:hover{background:rgba(255,255,255,.18)}.hero-actions{display:flex;flex-direction:column;gap:10px;min-width:220px;margin-top:10px}
 </style>
 """
 
@@ -493,7 +600,7 @@ def rating_stars(rating) -> str:
       try:
           r = float(rating)
       except (ValueError, TypeError):
-          return "—"
+          return "<span style='color:#6b7280;font-size:0.75rem'>—</span>"
       r = max(0.0, min(10.0, r))
       stars = max(1, min(5, int(round(r / 2.0))))
       return (
@@ -805,7 +912,7 @@ def find_row_index(ws, entry_id) -> int:
         cell = ws.find(str(entry_id), in_column=1)
     except Exception as e:
         raise RowLookupError(f"Could not verify row for entry_id {entry_id}: {e}")
-    return cell.row if cell else 0
+    return cell.row if cell else None
 
 
   # ─────────────────────────────────────────────
@@ -824,6 +931,30 @@ def render_sidebar():
           for _k in ["selected_entry_id","selected_entry_title","selected_entry_type"]:
               st.session_state.pop(_k, None)
           st.rerun()
+          SIDEBAR_NAV_CSS = """
+    <style>
+    section[data-testid="stSidebar"] div[role="radiogroup"] {
+    gap: 4px;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 10px 14px !important;
+        margin-bottom: 4px;
+        transition: var(--transition);
+        width: 100%;
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        border-color: var(--border-strong);
+        background: var(--surface-3);
+    }
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+    }
+    </style>
+    """
       page = st.sidebar.radio("Navigate", ["Browse", "Add Entry", "Reports"], index=0)
       prev_page = st.session_state.get("prev_page")
       if prev_page is not None and prev_page != page:
@@ -944,6 +1075,7 @@ def page_add_entry(entries_ws, current_name: str):
 
       # ── Main form ───────────────────────────────────────────────────
       with st.form("add_entry_form", clear_on_submit=False):
+          st.markdown("##### 🎬 What did you watch")
           c1, c2 = st.columns(2)
           with c1:
               added_by = st.text_input(
@@ -974,7 +1106,9 @@ def page_add_entry(entries_ws, current_name: str):
               )
           with c5:
               status = st.selectbox("Status", ["Watched", "Watching", "Plan"], index=0, key=f"add_status_{reset_n}")
-
+          
+          st.divider()
+          st.markdown("##### ⭐ Your experience")
           c6, c7 = st.columns(2)
           with c6:
               valid_pf_g = [g for g in pf_genres if g in GENRES_LIST]
@@ -1015,16 +1149,15 @@ def page_add_entry(entries_ws, current_name: str):
                       value=yr_default,
                       step=1, key=f"add_watchedyear_{reset_n}"
                   )
-
+          st.divider()
           # ENHANCEMENT #10: "Watched with" field
-          watched_with = st.text_input(
+          with st.expander("➕ Extra details (watched with, review)", expanded=False):
+            watched_with = st.text_input(
               "Watched with (optional)",
               placeholder="e.g. Rohan, Priya",
               help="Who did you watch this with?", key=f"add_watchedwith_{reset_n}"
-          )
-
-          with st.expander("Add a short review (optional)"):
-              comments = st.text_area("Review / comments", "", label_visibility="collapsed", key=f"add_comments_{reset_n}")
+            )
+            comments = st.text_area("Review / comments", "", label_visibility="collapsed", key=f"add_comments_{reset_n}")
 
           submitted = st.form_submit_button(
               "💾 Save entry", use_container_width=True, type="primary"
@@ -1048,11 +1181,20 @@ def page_add_entry(entries_ws, current_name: str):
                       existing_df["title"].str.strip().str.lower() == title.strip().lower()
                   ]
                   if not duplicates.empty and not st.session_state.get(dup_key):
-                      dup_by = duplicates.iloc[0].get("added_by", "someone")
-                      st.warning(f'"{title.strip()}" was already logged by {dup_by}. Click Save again to add anyway.')
-                    
-                      st.session_state[dup_key] = True
-                      st.stop()
+                    dup_by = duplicates.iloc[0].get("added_by", "someone")
+                    @st.dialog("Possible duplicate")
+                    def confirm_dup():
+                        st.write(f"'{title.strip()}' was already logged by **{dup_by}**.")
+                        d1, d2 = st.columns(2)
+                        with d1:
+                            if st.button("Add anyway", type="primary", use_container_width=True):
+                            st.session_state[dup_key] = True
+                            st.rerun()
+                        with d2:
+                            if st.button("Cancel", use_container_width=True):
+                                st.stop()
+                    confirm_dup()
+                    st.stop()
               except Exception:
                   existing_df = empty_df()
 
@@ -1100,28 +1242,94 @@ def page_add_entry(entries_ws, current_name: str):
 
                     st.success(f'"{title.strip()}" saved! Add another below.')
               except Exception as e:
-                        st.error("Error saving entry.")
+                        st.error(f"Error saving entry: {e}")
 
 
   # ─────────────────────────────────────────────
   #  PAGE: BROWSE (FIX #4: pagination reset, FIX #5: stable picks, Enhancement #3: sort)
   # ─────────────────────────────────────────────
 def render_stats_grid(stats):
-      st.markdown("""
-      <style>
-      .stats-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:8px 0 6px 0}
-      .stat-card{background:#dfe8ec;border-radius:0;padding:24px 22px;min-height:148px;display:flex;flex-direction:column;justify-content:flex-start;border:1px solid rgba(148,163,184,0.12)}
-      .stat-value{font-size:3rem;line-height:0.95;font-weight:300;color:#0f172a;letter-spacing:-0.03em}
-      .stat-label{margin-top:12px;font-size:1rem;line-height:1.2;color:#1f2937;font-weight:400;max-width:12ch}
-      .back-to-top-wrap{position:fixed;right:18px;bottom:20px;z-index:9998}
-      .back-to-top-wrap button{width:48px;height:48px;border-radius:999px;border:none;background:#111827;color:#fff;font-size:1.2rem;box-shadow:0 10px 24px rgba(0,0,0,.28);cursor:pointer}
-      @media (max-width: 900px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat-card{padding:18px 16px;min-height:124px}.stat-value{font-size:2.35rem}.stat-label{font-size:.92rem}}
-      </style>
-      """, unsafe_allow_html=True)
-      cards = []
-      for label, value in stats:
-          cards.append(f'<div class="stat-card"><div class="stat-value">{html.escape(str(value))}</div><div class="stat-label">{html.escape(str(label))}</div></div>')
-      st.markdown(f'<div class="stats-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin: 10px 0 18px 0;
+    }
+    .stat-card {
+        background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 22px 20px;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--border-strong);
+    }
+    .stat-card::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0;
+        width: 4px; height: 100%;
+        background: var(--accent);
+        opacity: 0.85;
+    }
+    .stat-value {
+        font-size: 2.6rem;
+        line-height: 1;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+    .stat-label {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        line-height: 1.3;
+        color: var(--text-muted);
+        font-weight: 500;
+        max-width: 16ch;
+    }
+    @media (max-width: 900px) {
+        .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .stat-card { padding: 18px 16px; min-height: 118px; }
+        .stat-value { font-size: 2.1rem; }
+        .stat-label { font-size: .82rem; }
+    }
+    @media (max-width: 480px) {
+        .stats-grid { grid-template-columns: 1fr; }
+        .stat-card { min-height: 100px; }
+    }
+    .back-to-top-wrap {
+        position: fixed; right: 18px; bottom: 20px; z-index: 9998;
+    }
+    .back-to-top-wrap button {
+        width: 48px; height: 48px; border-radius: 999px; border: none;
+        background: var(--accent); color: #fff; font-size: 1.2rem;
+        box-shadow: var(--shadow-md); cursor: pointer; transition: var(--transition);
+    }
+    .back-to-top-wrap button:hover { background: var(--accent-hover); transform: translateY(-2px); }
+    </style>
+    """, unsafe_allow_html=True)
+
+    cards = []
+    for label, value in stats:
+        cards.append(
+            f'<div class="stat-card">'
+            f'<div class="stat-value">{html.escape(str(value))}</div>'
+            f'<div class="stat-label">{html.escape(str(label))}</div>'
+            f'</div>'
+        )
+    st.markdown(f'<div class="stats-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def render_back_to_top_button():
@@ -1143,8 +1351,7 @@ def render_back_to_top_button():
           var s=win.scrollY||win.pageYOffset||0;
           btn.style.opacity = s>80 ? '1' : '0.35';
         }
-        win.addEventListener('scroll',check,{passive:true});
-        setInterval(check,800);
+        win.addEventListener('scroll', check, {passive: true});
         check();
       })();
       </script>
@@ -1174,8 +1381,12 @@ def page_browse(entries_ws, votes_ws):
 
       search_text = st.session_state.get("browse_search", "")
 
-      df           = read_entries(entries_ws)
-      votes_df     = read_votes(votes_ws)
+      with st.spinner(""):
+        ph = st.empty()
+        ph.markdown('<div style="display:flex;gap:14px;"><div style="height:100px;width:100%;background:var(--surface-2);border-radius:12px;animation:pulse 1.5s infinite;"></div></div><style>@keyframes pulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}</style>', unsafe_allow_html=True)
+        df = read_entries(entries_ws)
+        votes_df = read_votes(votes_ws)
+        ph.empty()
       vote_summary = build_vote_summary(votes_df)
 
       selected_entry_id = st.session_state.get("selected_entry_id")
@@ -1253,47 +1464,23 @@ def page_browse(entries_ws, votes_ws):
                           st.rerun()
               st.divider()
 
-      # ── Sidebar filters ───────────────────────────────────────────
-      preset = st.sidebar.radio(
-          "Quick filter",
-          ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"],
-          index=0,
-          key="browse_preset",
-      )
-
-      my_name   = st.session_state.get("user_name", "").strip()
-      show_mine = st.sidebar.checkbox("Show only my entries", value=False, key="show_mine_check")
-
-      # ENHANCEMENT #3: Sort control
-      sort_choice = st.sidebar.selectbox(
-          "Sort by",
-          list(SORT_OPTIONS.keys()),
-          index=0,
-          key="sort_select",
-      )
-
-      with st.sidebar.expander("Filters", expanded=False):
-          fc1, fc2, fc3, fc4, fc5 = st.columns(5)
-          with fc1:
-              plat_opts = sorted(df["platform"].dropna().replace("", "Unknown").unique().tolist()) \
-                  if "platform" in df.columns else []
-              plat_f = st.multiselect("Platform", plat_opts, key="f_plat")
-          with fc2:
-              type_opts2 = sorted(df["type"].dropna().unique().tolist()) if "type" in df.columns else []
-              type_f = st.multiselect("Type", type_opts2, key="f_type")
-          with fc3:
-              stat_opts = sorted(df["status"].dropna().unique().tolist()) if "status" in df.columns else []
-              stat_f = st.multiselect("Status", stat_opts, key="f_stat")
-          with fc4:
-              rec_opts = sorted(df["recommend"].dropna().unique().tolist()) if "recommend" in df.columns else []
-              rec_f = st.multiselect("Rec", rec_opts, key="f_rec")
-          with fc5:
-              all_genres = sorted(set(
-                  g.strip()
-                  for gs in df.get("genre", pd.Series(dtype=str)).dropna()
-                  for g in str(gs).split(",") if g.strip()
-              ))
-              genre_f = st.multiselect("Genre", all_genres, key="f_genre")
+      with st.expander("🔍 Filters & Sort", expanded=False):
+          fc0a, fc0b = st.columns(2)
+          with fc0a:
+              preset = st.selectbox("Quick filter", ["All", "Recommended only", "High ratings (8+)", "Plan to Watch"], key="browse_preset")
+          with fc0b:
+              show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
+          my_name = st.session_state.get("username", "").strip()
+          sort_choice = st.selectbox("Sort by", list(SORT_OPTIONS.keys()), index=0, key="sort_select")
+          fc1, fc2, fc3, fc4, fc5 = st.columns(5)  
+          with fc1: plat_f = st.multiselect("Platform", plat_opts, key="f_plat")
+          with fc2: type_f = st.multiselect("Type", type_opts2, key="f_type")
+          with fc3: stat_f = st.multiselect("Status", stat_opts, key="f_stat")
+          with fc4: rec_f = st.multiselect("Rec", rec_opts, key="f_rec")
+          with fc5: genre_f = st.multiselect("Genre", all_genres, key="f_genre")
+      active_count = sum([bool(plat_f), bool(type_f), bool(stat_f), bool(rec_f), bool(genre_f), preset != "All", show_mine])
+      if active_count:
+        st.caption(f"🔧 {active_count} filter(s) active")
 
       # ── Apply filters ──────────────────────────────────────────────
       filtered = df.copy()
@@ -1357,7 +1544,18 @@ def page_browse(entries_ws, votes_ws):
       st.caption(f"Showing **{len(filtered)}** of **{total}** entries")
 
       st.divider()
-
+      PAGINATION_CSS = """<style>
+      .pagination-wrap button {
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--surface-2) !important;
+        font-weight: 600 !important;
+        }
+      .pagination-wrap button:hover:not(:disabled) {
+        border-color: var(--accent) !important;
+        background: var(--accent-soft) !important;
+        }
+        </style>"""
       # -- Pagination + render helper (FIX #9: explicit params)
       def _paginate_render(tab_df, tab_key, v_mode, v_summary, v_df, v_ws):
           t_total = len(tab_df)
@@ -1369,6 +1567,8 @@ def page_browse(entries_ws, votes_ws):
           page_start = (st.session_state[pg_key] - 1) * PAGE_SIZE
           page_data  = tab_df.iloc[page_start : page_start + PAGE_SIZE]
           if t_pages > 1:
+              st.markdown(PAGINATION_CSS, unsafe_allow_html=True)
+              st.markdown('<div class="pagination-wrap">', unsafe_allow_html=True)
               pg1, pg2, pg3 = st.columns([1, 3, 1])
               with pg1:
                   if st.button("◄ Prev", disabled=st.session_state[pg_key] <= 1,
@@ -1387,6 +1587,8 @@ def page_browse(entries_ws, votes_ws):
                                key="next_" + tab_key):
                       st.session_state[pg_key] += 1
                       st.rerun()
+              st.markdown('</div>', unsafe_allow_html=True)
+
           if v_mode == "Cards":
               _render_cards(page_data, v_summary, v_df, v_ws, entries_ws, render_scope=tab_key)
           else:
@@ -1444,8 +1646,10 @@ def page_reports(entries_ws):
                   .value_counts()
                   .rename_axis("Platform").reset_index(name="Count").set_index("Platform")
               )
-              st.bar_chart(pc)
-              st.dataframe(pc.reset_index(), use_container_width=True)
+              with st.container(border=True):
+                st.markdown("**By Platform**")
+                st.bar_chart(pc)
+                st.dataframe(pc.reset_index(), use_container_width=True)
 
       with tab2:
           if "genre" in df.columns:
@@ -1458,8 +1662,10 @@ def page_reports(entries_ws):
                   exploded.value_counts()
                   .rename_axis("Genre").reset_index(name="Count").set_index("Genre")
               )
-              st.bar_chart(gc)
-              st.dataframe(gc.reset_index(), use_container_width=True)
+              with st.container(border=True):
+                st.markdown("**By Genre**")
+                st.bar_chart(gc)
+                st.dataframe(gc.reset_index(), use_container_width=True)
 
       with tab3:
           if "added_by" in df.columns:
@@ -1468,9 +1674,10 @@ def page_reports(entries_ws):
                   .value_counts()
                   .rename_axis("Person").reset_index(name="Entries").set_index("Person")
               )
-              st.bar_chart(ac)
-              avg_by = df.groupby("added_by")["rating"].mean().round(1).rename("Avg Rating")
-              st.dataframe(avg_by.reset_index(), use_container_width=True)
+              with st.container(border=True):
+                st.markdown("**By AddedBy**")
+                st.bar_chart(ac)
+                st.dataframe(ac.reset_index(), use_container_width=True)
 
       # ENHANCEMENT #10: "Watched Together" stats
       with tab4:
@@ -1486,8 +1693,10 @@ def page_reports(entries_ws):
                       .rename_axis("Companion").reset_index(name="Times Watched Together")
                       .set_index("Companion")
                   )
-                  st.bar_chart(companions)
-                  st.dataframe(companions.reset_index(), use_container_width=True)
+                  with st.container(border=True):
+                    st.markdown("**By Companions**")
+                    st.bar_chart(companions)
+                    st.dataframe(companions.reset_index(), use_container_width=True)
           else:
               st.info("'Watched with' column not available yet.")
 
@@ -1550,9 +1759,9 @@ CARD_CSS = """<style>
 
 def _inject_card_css():
       # FIX #3: use session_state instead of fragile module-level global
-      if not st.session_state.get("_card_css_injected"):
-          st.markdown(CARD_CSS, unsafe_allow_html=True)
-          st.session_state["_card_css_injected"] = True
+      if not st.session_state.get("clickable_card_css_injected"):
+        st.markdown(CLICKABLE_CARD_CSS, unsafe_allow_html=True)
+        st.session_state["clickable_card_css_injected"] = True
 
 
 def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render_scope="main"):
@@ -1624,6 +1833,8 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
     {img_html}
     <div style="flex:1;min-width:0;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      status_color = {"watched": "var(--success)", "watching": "var(--warning)", "plan": "var(--info)"}.get(str(row.get("status","")).lower(), "var(--border)")
+       card_html = re.sub(r'\n+', ' ',
         <div>
           <span class="wlog-card-title">{title_txt}</span>
           <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
@@ -1657,23 +1868,46 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
           card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
           st.markdown(card_html, unsafe_allow_html=True)
 
-          action_col, _ = st.columns([1.35, 8.65])
-          with action_col:
-              if st.button("View Details", key=f"view_{entry_id}_{idx}_{render_scope}", use_container_width=True):
-                  st.session_state["selected_entry_id"] = _normalize_entry_id(raw_entry_id)
-                  st.session_state["selected_entry_title"] = str(row.get("title", "") or "").strip()
-                  st.session_state["selected_entry_type"] = str(row.get("type", "") or "").strip()
-                  st.rerun()
+          CLICKABLE_CARD_CSS = """
+    <style>
+    .wlog-card {
+        transition: var(--transition);
+        cursor: pointer;
+    }
+    .wlog-card:hover {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-sm);
+        transform: translateY(-1px);
+    }
+/* Make the "View Details" button look like a full pill,
+   not a cramped narrow button */
+    div[data-testid="stButton"] > button[kind="secondary"] {
+        width: 100%;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+        font-weight: 600;
+        padding: 8px 14px;
+        transition: var(--transition);
+    }
+    div[data-testid="stButton"] > button[kind="secondary"]:hover {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--text);
+    }
+    </style>
+    """
+      VOTE_CSS = """<style>
+      .vote-btn-wrap button { min-height:44px !important; min-width:44px !important; font-size:1.1rem !important; border-radius:10px !important; }
+      </style>"""
+        # Vote + Edit/Delete row
+      with st.expander("Vote / Manage", expanded=False):
+            render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope)
+            if current_user and current_user.lower() == row.get("added_by", "").strip().lower():
+                render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
 
-          # Vote + Edit/Delete row
-          _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws,
-                              counts["yes"], counts["no"], idx, render_scope)
-
-          # ENHANCEMENT #1: Edit/Delete (only visible to the entry owner)
-          if current_user and current_user.lower() == (row.get("added_by", "") or "").strip().lower():
-              _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
-
-          st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
+      st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
 def _selectbox_preserve(label, options, current, key=None):
     """Selectbox that never silently discards an off-list current value (H1)."""
@@ -1712,7 +1946,7 @@ def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
               if st.button("Yes, delete", key=f"confirm_yes_{entry_id}_{scope}", type="primary"):
                 try:
                     row_idx = find_row_index(entries_ws, entry_id)
-                    if row_idx:
+                    if row_idx is not None:
                         delete_row(entries_ws, row_idx)
                         read_entries.clear()
                         votes_df_now = read_votes(votes_ws)
@@ -1764,7 +1998,7 @@ def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
                             except RowLookupError as e:
                                 st.error(f"Could not verify entry location: {e}")
                                 row_idx = None
-                            if not row_idx:
+                            if row_idx is None:
                                 st.error("Could not find entry.")
                             elif _row_snapshot_changed(entries_ws, row_idx, row):
                                 st.warning("This entry was changed by someone else since you opened it. Reload and try again.")
@@ -1818,7 +2052,8 @@ def _render_vote_widget(entry_id, title_txt, voter_name,
           )
           return
 
-      lbl_col, yes_col, no_col, _ = st.columns([3, 1, 1, 5])
+      st.markdown(VOTE_CSS, unsafe_allow_html=True)
+      lbl_col, yes_col, no_col, _ = st.columns([2, 1, 1, 4])
       with lbl_col:
           st.markdown(
               '<span style="font-size:0.75rem;color:#9ca3af;">Your vote:</span>',
@@ -1908,6 +2143,19 @@ def main():
         layout="wide",
     )
 
+if not st.session_state.get("username"):
+    @st.dialog("Welcome! What's your name?")
+    def name_dialog():
+        n = st.text_input("Your name", placeholder="e.g. Pankaj")
+        if st.button("Continue", type="primary", use_container_width=True):
+            if n.strip():
+                st.session_state["username"] = n.strip()
+                st.session_state["voter_name"] = n.strip()
+                st.rerun()
+            else:
+                st.warning("Please enter a name.")
+    name_dialog()
+
     _gs = st.text_input(
         "Search",
         value=st.session_state.get("browse_search", ""),
@@ -1918,7 +2166,14 @@ def main():
     st.session_state["browse_search"] = _gs
     st.title("🎬 What Am I Watching?")
     st.caption("A shared log for movies & web series across all OTT platforms. ")
-
+    if st.session_state.get("username"):
+        st.caption(f"👤 Logged in as **{st.session_state['username']}**")
+    if not st.session_state.get("onboarded"):
+        with st.container(border=True):
+            st.markdown("**New here?** 1) Log what you watch in **Add Entry** → 2) Browse & vote on friends' picks → 3) Check **View Details on each card** for Trailer, Cast and more info")
+            if st.button("Got it", key="dismiss_onboarding"):
+                st.session_state["onboarded"] = True
+                st.rerun()
     result, err = get_sheets_safe()
     if err:
         st.error(f"⚠ App cannot start: {err}")
