@@ -8,6 +8,7 @@ from datetime import datetime
 import re
 import html
 import time
+import hashlib
 
   # ─────────────────────────────────────────────
   #  CONFIG
@@ -219,7 +220,7 @@ def tmdb_fetch_details(title: str, media_type: str, _v: int = 2) -> dict:
                 (c.get("name", "") for c in data.get("credits", {}).get("crew", []) if c.get("job") == "Director"),
                 ""
             )
-          return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "networks": networks, "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
+          return {"name": data.get("title") or data.get("name") or title, "tmdb_id": tmdb_id, "overview": data.get("overview", ""), "tagline": data.get("tagline", ""), "poster_url": poster_url, "backdrop_url": backdrop_url, "genres": genres, "release_date": data.get("release_date") or data.get("first_air_date") or "", "language": data.get("original_language", ""), "networks": networks, "runtime": data.get("runtime") or (data.get("episode_run_time") or [None])[0], "tmdb_rating": data.get("vote_average"), "tmdb_votes": data.get("vote_count"), "status": data.get("status", ""), "cast": cast, "director": director, "trailer_url": trailer_url, "number_of_seasons": data.get("number_of_seasons"), "number_of_episodes": data.get("number_of_episodes"), "last_air_date": data.get("last_air_date", ""), "next_episode_to_air": {"name": next_episode.get("name", ""), "air_date": next_episode.get("air_date", ""), "episode_number": next_episode.get("episode_number")}, "seasons": seasons}
       except Exception:
           return {}
 
@@ -352,9 +353,6 @@ def render_entry_detail(entry_row, vote_summary):
       year_html = f' • {html.escape(release_year)}' if release_year else ''
       hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ''
       director = tmdb.get("director", "")
-      if tmdb.get("cast"):
-          # grab first crew director from TMDB data if stored; fallback blank
-          pass
       _entry_status = str(entry_row.get("status","") or "").strip().lower()
       _is_watched = _entry_status in ("watched",)
       _is_in_collection = entry_id in st.session_state.get("my_collection", set())
@@ -698,6 +696,8 @@ def read_entries(_ws) -> pd.DataFrame:
           df["status"] = df["status"].str.strip().str.lower()
     if "recommend" in df.columns:
           df["recommend"] = df["recommend"].str.strip().str.lower()
+    if "platform" in df.columns:
+          df["platform"] = df["platform"].str.strip().apply(_normalize_platform_name)
     return df
 
 
@@ -803,11 +803,9 @@ class RowLookupError(Exception):
 def find_row_index(ws, entry_id) -> int:
     try:
         cell = ws.find(str(entry_id), in_column=1)
-        return cell.row if cell else 0
-    except gspread.exceptions.CellNotFound:
-        return 0
     except Exception as e:
         raise RowLookupError(f"Could not verify row for entry_id {entry_id}: {e}")
+    return cell.row if cell else 0
 
 
   # ─────────────────────────────────────────────
@@ -1043,12 +1041,12 @@ def page_add_entry(entries_ws, current_name: str):
                   st.error(e)
           else:
               # ENHANCEMENT #2: Duplicate detection
+              dup_key = f"_confirm_duplicate_{title.strip().lower()}"
               try:
                   existing_df = read_entries(entries_ws)
                   duplicates = existing_df[
                       existing_df["title"].str.strip().str.lower() == title.strip().lower()
                   ]
-                  dup_key = f"_confirm_duplicate_{title.strip().lower()}"
                   if not duplicates.empty and not st.session_state.get(dup_key):
                       dup_by = duplicates.iloc[0].get("added_by", "someone")
                       st.warning(f'"{title.strip()}" was already logged by {dup_by}. Click Save again to add anyway.')
@@ -1153,6 +1151,19 @@ def render_back_to_top_button():
       """, unsafe_allow_html=True)
 
 
+def _stable_daily_picks(pool_df: pd.DataFrame, date_str: str, n: int) -> pd.DataFrame:
+    """Deterministic, order-independent 'stable for today' selection (M2).
+    Unlike DataFrame.sample(random_state=...), this depends only on which
+    entry_ids currently qualify + today's date — not on the pool's row
+    order, so it won't silently pick a different set if the pool is
+    rebuilt (e.g. after a cache refresh) with the same members in a
+    different order."""
+    ids = pool_df["entry_id"].apply(_normalize_entry_id)
+    ranked = sorted(ids, key=lambda eid: hashlib.md5(f"{date_str}:{eid}".encode()).hexdigest())
+    chosen = set(ranked[:n])
+    return pool_df[ids.isin(chosen)]
+
+
 def page_browse(entries_ws, votes_ws):
       st.markdown("""
       <style>
@@ -1219,9 +1230,9 @@ def page_browse(entries_ws, votes_ws):
               st.markdown("### 🍿 Tonight's picks")
               st.caption("Top-rated, community-recommended picks (stable for today).")
               sample_size = min(3, len(top_pool))
-              # FIX #5: date-based seed so picks stay the same all day
-              daily_seed = int(datetime.now().strftime("%Y%m%d"))
-              picks = top_pool.sample(n=sample_size, random_state=daily_seed)
+              # FIX #5 / M2: deterministic by entry_id + date, independent of row order
+              today_str = datetime.now().strftime("%Y%m%d")
+              picks = _stable_daily_picks(top_pool, today_str, sample_size)
               pcols = st.columns(sample_size)
               for i, (_, pr) in enumerate(picks.iterrows()):
                   with pcols[i]:
@@ -1725,8 +1736,10 @@ def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
               new_title = st.text_input("Title", value=row.get("title", ""))
               ec1, ec2, ec3 = st.columns(3)
               with ec1:
-                  new_platform = _selectbox_preserve ("Platform", PLATFORMS, row.get("platform", "")),
-                  key=f"edit_platform_{entry_id}_{scope}",
+                  new_platform = _selectbox_preserve(
+                      "Platform", PLATFORMS, row.get("platform", ""),
+                      key=f"edit_platform_{entry_id}_{scope}",
+                  )
               with ec2:
                   cur_status = str(row.get("status", "") or "").strip().lower()
                   new_status = _selectbox_preserve("Status", ["watched", "watching", "plan"], cur_status,
@@ -1850,8 +1863,8 @@ def _render_table(filtered, vote_summary):
           total  = counts["yes"] + counts["no"]
           if total == 0:
               return "—"
-          pct = vote_percentages(counts["yes"] , counts["no"])
-          return f'👍{counts["yes"]} / 👎{counts["no"]} ({pct}%)'
+          pct_yes, _ = vote_percentages(counts["yes"], counts["no"])
+          return f'👍{counts["yes"]} / 👎{counts["no"]} ({pct_yes}%)'
 
       df_display["community_votes"] = df_display.apply(_comm_votes, axis=1)
 
