@@ -1174,42 +1174,43 @@ def page_add_entry(entries_ws, current_name: str):
                   st.error(e)
           else:
               # ENHANCEMENT #2: Duplicate detection
-              dup_key = f"_confirm_duplicate_{title.strip().lower()}"
-              try:
-                  existing_df = read_entries(entries_ws)
-                  duplicates = existing_df[
-                      existing_df["title"].str.strip().str.lower() == title.strip().lower()
-                  ]
-                  if not duplicates.empty and not st.session_state.get(dup_key):
+            dup_key = f"confirm_duplicate_{title.strip().lower()}"
+            try:
+                existing_df = read_entries(entries_ws)
+                duplicates = existing_df[existing_df["title"].str.strip().str.lower() == title.strip().lower()]
+
+                if not duplicates.empty and not st.session_state.get(dup_key):
                     dup_by = duplicates.iloc[0].get("added_by", "someone")
                     @st.dialog("Possible duplicate")
                     def confirm_dup():
                         st.write(f"'{title.strip()}' was already logged by **{dup_by}**.")
+
                         d1, d2 = st.columns(2)
                         with d1:
                             if st.button("Add anyway", type="primary", use_container_width=True):
-                            st.session_state[dup_key] = True
-                            st.rerun()
+                                st.session_state[dup_key] = True
+                                st.rerun()
+
                         with d2:
                             if st.button("Cancel", use_container_width=True):
-                                st.stop()
+                                st.rerun()
                     confirm_dup()
                     st.stop()
-              except Exception:
-                  existing_df = empty_df()
 
-              st.session_state.pop(dup_key, None)
+            except Exception:
+                existing_df = empty_df()
+                st.session_state.pop(dup_key, None)
 
-              if added_by.strip():
+          if added_by.strip():
                   st.session_state["user_name"]  = added_by.strip()
                   st.session_state["voter_name"] = added_by.strip()
 
-              poster_url = st.session_state.pop("pending_poster", "")
+      poster_url = st.session_state.pop("pending_poster", "")
 
-              # FIX entry_id: 13-digit epoch ms, safe from scientific notation in Sheets
-              next_id = int(time.time() * 1000)
+# FIX entry_id: 13-digit epoch ms, safe from scientific notation in Sheets
+      next_id = int(time.time() * 1000)
 
-              row = {
+      row = {
                   "entry_id":     next_id,
                   "timestamp":    datetime.now().isoformat(timespec="seconds"),
                   "added_by":     added_by.strip(),
