@@ -1000,7 +1000,7 @@ def render_sidebar():
       st.session_state["prev_page"] = page
       st.sidebar.divider()
 
-      stored = st.session_state.get("user_name", "")
+      stored = st.session_state.get("username", "")
       name_in = st.sidebar.text_input(
           "Your name",
           value=stored,
@@ -1010,7 +1010,7 @@ def render_sidebar():
       )
       name = name_in.strip()
       if name:
-          st.session_state["user_name"]    = name
+          st.session_state["username"]    = name
           st.session_state["saved_name"]   = name
           st.session_state["voter_name"]   = name
           st.session_state["sidebar_name"] = name
@@ -1232,7 +1232,7 @@ def page_add_entry(entries_ws, current_name: str):
                 st.session_state.pop(dup_key, None)
 
             if added_by.strip():
-                st.session_state["user_name"] = added_by.strip()
+                st.session_state["username"] = added_by.strip()
                 st.session_state["voter_name"] = added_by.strip()
                 poster_url = st.session_state.pop("pending_poster", "")
                 next_id = int(time.time() * 1000)
@@ -1808,51 +1808,67 @@ def _inject_card_css():
 
 
 def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render_scope="main"):
-      _inject_card_css()
-      if filtered.empty:
-          st.info("No entries match the current filters.")
-          return
+    _inject_card_css()
+    if filtered.empty:
+        st.info("No entries match the current filters.")
+        return
+    voter_name = st.session_state.get("voter_name", "").strip()
+    current_user = st.session_state.get("username", "").strip()
 
-      voter_name = st.session_state.get("voter_name", "").strip()
-      current_user = st.session_state.get("user_name", "").strip()
-
-      for idx, (_, row) in enumerate(filtered.iterrows()):
-          raw_entry_id = row.get("entry_id", 0)
-          entry_id = _resolve_entry_id(row)
-          if entry_id is None:
-              st.markdown(
-                  f'<div class="wlog-card"><span style="color:#f87171;font-size:.85rem;">'
-                  f'⚠ "{html.escape(str(row.get("title","")))}" has a corrupted entry_id — '
-                  f'skipped. Ask an admin to repair this row.</span></div>',
-                  unsafe_allow_html=True,
-              )
-              continue  # skip vote/edit/delete widgets for this row entirely
-          title_txt      = row.get("title",    "—")
-          type_txt       = (row.get("type",    "") or "").title()
-          genre_txt      = row.get("genre",    "") or "—"
-          added_by_txt   = row.get("added_by", "") or "Unknown"
-          comments_txt   = row.get("comments", "") or ""
-          poster_url     = row.get("poster_url", "") or ""
-          watched_with   = row.get("watched_with", "") or ""
-          platform_html  = platform_badge(row.get("platform", ""))
-          rating_html    = rating_stars(row.get("rating"))
-          status_html    = status_badge(row.get("status",    ""))
-          recommend_html = recommend_badge(row.get("recommend", ""))
+    for idx, (_, row) in enumerate(filtered.iterrows()):
+        title = str(row.get("title", "") or "").strip()
+        media_type = normalize_media_type(row.get("type", "Movie"))
+        platform = str(row.get("platform", "") or "").strip()
+        genre = str(row.get("genre", "") or "").strip()
+        recommend = str(row.get("recommend", "") or "").strip().lower()
+        raw_status = row.get("status", "")
+        status_key = str(raw_status).strip().lower() if pd.notna(raw_status) else ""
+        raw_rating = row.get("rating", "")
+        rating_text = ""
+        if pd.notna(raw_rating) and str(raw_rating).strip() != "":
+            rating_text = str(raw_rating).strip()
+        status_color_map = {
+            "watched": "var(--success)",
+            "watching": "var(--warning)",
+            "plan": "var(--info)",
+		}
+        status_color = status_color_map.get(status_key, "var(--border)")
+        raw_entry_id = row.get("entry_id", 0)
+        entry_id = _resolve_entry_id(row)
+        if entry_id is None:
+            st.markdown(
+                f'<div class="wlog-card"><span style="color:#f87171;font-size:.85rem;">'
+                f'⚠ "{html.escape(title)}" has a corrupted entry_id — '
+                f'skipped. Ask an admin to repair this row.</span></div>',
+                unsafe_allow_html=True,
+            )
+            continue  # skip vote/edit/delete widgets for this row entirely
+        title_txt      = row.get("title",    "—")
+        type_txt       = (row.get("type",    "") or "").title()
+        genre_txt      = row.get("genre",    "") or "—"
+        added_by_txt   = row.get("added_by", "") or "Unknown"
+        comments_txt   = row.get("comments", "") or ""
+        poster_url     = row.get("poster_url", "") or ""
+        watched_with   = row.get("watched_with", "") or ""
+        platform_html  = platform_badge(row.get("platform", ""))
+        rating_html    = rating_stars(row.get("rating"))
+        status_html    = status_badge(row.get("status",    ""))
+        recommend_html = recommend_badge(row.get("recommend", ""))
 
           # XSS protection
-          title_txt    = html.escape(str(title_txt))
-          type_txt     = html.escape(str(type_txt))
-          genre_txt    = html.escape(str(genre_txt))
-          added_by_txt = html.escape(str(added_by_txt))
-          comments_txt = html.escape(str(comments_txt))
-          watched_with = html.escape(str(watched_with))
+        title_txt    = html.escape(str(title_txt))
+        type_txt     = html.escape(str(type_txt))
+        genre_txt    = html.escape(str(genre_txt))
+        added_by_txt = html.escape(str(added_by_txt))
+        comments_txt = html.escape(str(comments_txt))
+        watched_with = html.escape(str(watched_with))
 
-          counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-          comm_bar = community_bar(counts["yes"], counts["no"])
+        counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+        comm_bar = community_bar(counts["yes"], counts["no"])
 
           # ENHANCEMENT #6: spoiler toggle for reviews
-          review_html = ""
-          if comments_txt:
+        review_html = ""
+        if comments_txt:
               review_html = (
                   f'<details style="margin-top:4px;">'
                   f'<summary style="font-size:0.78rem;color:#94a3b8;cursor:pointer;">💬 Show review</summary>'
@@ -1861,38 +1877,37 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
               )
 
           # ENHANCEMENT #10: show "watched with" info
-          watched_with_html = ""
-          if watched_with:
+        watched_with_html = ""
+        if watched_with:
               watched_with_html = f'<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px;">👥 {watched_with}</span>'
 
-          if poster_url:
-              img_html = (
-                  f'<img src="{html.escape(poster_url)}" width="54" height="80" '
-                  f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
-                  f'alt="poster" loading="lazy">'
-              )
-              card_inner = f"""
-  <div style="display:flex;gap:12px;align-items:flex-start;">
-    {img_html}
-    <div style="flex:1;min-width:0;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      status_color = {"watched": "var(--success)", "watching": "var(--warning)", "plan": "var(--info)"}.get(str(row.get("status","")).lower(), "var(--border)")
-       card_html = re.sub(r'\n+', ' ',
-        <div>
-          <span class="wlog-card-title">{title_txt}</span>
-          <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-      </div>
-      <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-        {rating_html} {recommend_html} {status_html}
-      </div>
-      {review_html}
-      <div style="margin-top:6px;">{comm_bar}</div>
-      <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
-    </div>
-  </div>"""
-          else:
+        if poster_url:
+            img_html = (
+                f'<img src="{html.escape(poster_url)}" width="54" height="80" '
+                f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
+                f'alt="poster" loading="lazy">'
+            )
+            card_inner = f"""
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+                {img_html}
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                        <div>
+                            <span class="wlog-card-title">{title_txt}</span>
+                            <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+                    </div>
+                    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+                        {rating_html} {recommend_html} {status_html}
+                    </div>
+                    {review_html}
+                    <div style="margin-top:6px;">{comm_bar}</div>
+                    <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
+                </div>
+            </div>
+            """
+        else:
               card_inner = f"""
   <div style="display:flex;justify-content:space-between;align-items:flex-start;">
     <div>
@@ -1908,10 +1923,10 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
   <div style="margin-top:6px;">{comm_bar}</div>
   <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>"""
 
-          card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
-          st.markdown(card_html, unsafe_allow_html=True)
+        card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
+        st.markdown(card_html, unsafe_allow_html=True)
 
-          CLICKABLE_CARD_CSS = """
+        CLICKABLE_CARD_CSS = """
     <style>
     .wlog-card {
         transition: var(--transition);
@@ -1941,16 +1956,16 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
     }
     </style>
     """
-      VOTE_CSS = """<style>
+    VOTE_CSS = """<style>
       .vote-btn-wrap button { min-height:44px !important; min-width:44px !important; font-size:1.1rem !important; border-radius:10px !important; }
       </style>"""
         # Vote + Edit/Delete row
-      with st.expander("Vote / Manage", expanded=False):
+    with st.expander("Vote / Manage", expanded=False):
             _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope)
             if current_user and current_user.lower() == row.get("added_by", "").strip().lower():
                 _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
 
-      st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
+    st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
 def _selectbox_preserve(label, options, current, key=None):
     """Selectbox that never silently discards an off-list current value (H1)."""
@@ -2180,33 +2195,36 @@ def _render_table(filtered, vote_summary):
   #  MAIN
   # ─────────────────────────────────────────────
 def main():
-    st.set_page_config(
-        page_title="What Am I Watching?",
-        page_icon="🎬",
-        layout="wide",
-    )
+    st.set_page_config(page_title="What Am I Watching?", page_icon="🎬", layout="wide")
 
-if not st.session_state.get("username"):
+    if "username" not in st.session_state:
+        st.session_state["username"] = ""
+    if "voter_name" not in st.session_state:
+        st.session_state["voter_name"] = ""
+
     @st.dialog("Welcome! What's your name?")
     def name_dialog():
-        n = st.text_input("Your name", placeholder="e.g. Pankaj")
+        n = st.text_input("Your name", value=st.session_state.get("username", ""), placeholder="e.g. Pankaj")
         if st.button("Continue", type="primary", use_container_width=True):
-            if n.strip():
-                st.session_state["username"] = n.strip()
-                st.session_state["voter_name"] = n.strip()
+            cleaned = n.strip()
+            if cleaned:
+                st.session_state["username"] = cleaned
+                st.session_state["voter_name"] = cleaned
                 st.rerun()
             else:
                 st.warning("Please enter a name.")
-    name_dialog()
 
-    _gs = st.text_input(
+    if not st.session_state.get("username", "").strip():
+        name_dialog()
+
+    gs = st.text_input(
         "Search",
         value=st.session_state.get("browse_search", ""),
         placeholder="Search movies or web series...",
         key="global_search_top",
         label_visibility="collapsed",
     )
-    st.session_state["browse_search"] = _gs
+    st.session_state["browse_search"] = gs
     st.title("🎬 What Am I Watching?")
     st.caption("A shared log for movies & web series across all OTT platforms. ")
     if st.session_state.get("username"):
