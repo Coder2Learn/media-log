@@ -443,7 +443,7 @@ def tmdb_fetch_details_by_id(tmdb_id: str, media_type: str, _v: int = 2) -> dict
   # ─────────────────────────────────────────────
 DETAIL_CSS = """
 <style>
-.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#cbd5e1;font-size:.98rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}.hero-meta-grid{display:flex;gap:32px;flex-wrap:wrap;margin-top:18px;margin-bottom:20px}.hero-meta-col{min-width:80px}.hero-meta-label{color:#94a3b8;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}.hero-meta-value{color:#f1f5f9;font-size:.97rem;font-weight:600;line-height:1.3}.hero-action-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:all .18s}.hero-action-primary{background:#7c3aed;color:#fff}.hero-action-primary:hover{background:#6d28d9}.hero-action-secondary{background:rgba(255,255,255,.10);color:#f1f5f9;border:1px solid rgba(255,255,255,.16)}.hero-action-secondary:hover{background:rgba(255,255,255,.18)}.hero-actions{display:flex;flex-direction:column;gap:10px;min-width:220px;margin-top:10px}
+.detail-shell{position:relative;border:1px solid rgba(148,163,184,.16);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,rgba(3,7,18,.98) 0,rgba(8,12,20,.98) 100%);box-shadow:0 20px 50px rgba(0,0,0,.30);margin-bottom:18px}.detail-hero{position:relative;min-height:460px}.detail-backdrop{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05);opacity:.42}.detail-backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,17,.10) 0,rgba(6,10,17,.76) 66%,rgba(6,10,17,.96) 100%),linear-gradient(90deg,rgba(6,10,17,.92) 0,rgba(6,10,17,.55) 38%,rgba(6,10,17,.82) 100%)}.detail-content{position:relative;z-index:2;padding:34px 34px 28px 34px}.detail-poster{width:210px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);box-shadow:0 18px 40px rgba(0,0,0,.42)}.detail-poster img{width:100%;display:block}.detail-kicker{color:#cbd5e1;font-size:.88rem;margin-bottom:8px;letter-spacing:.02em}.detail-title{color:#f8fafc;font-size:2.35rem;line-height:1.08;font-weight:850;margin-bottom:10px}.detail-tagline{color:#c084fc;font-size:1.2rem;margin-bottom:14px;font-style:italic}.detail-meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}.detail-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06);color:#e5e7eb;font-size:.78rem;font-weight:650}.detail-overview{color:#dbe4ee;font-size:1rem;line-height:1.72;max-width:880px}.detail-panel{border:1px solid rgba(148,163,184,.12);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(17,24,39,.58) 0,rgba(10,14,23,.66) 100%);backdrop-filter:blur(10px);height:100%}.detail-panel h4{color:#f8fafc;margin:0 0 12px 0;font-size:1.06rem;font-weight:800}.detail-fact-label{color:#94a3b8;font-size:.73rem;text-transform:uppercase;letter-spacing:.08em;margin-top:6px}.detail-fact-value{color:#f8fafc;font-size:.95rem;margin-top:2px;margin-bottom:10px}.cast-strip{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.18) transparent}.cast-strip::-webkit-scrollbar{height:4px}.cast-strip::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:4px}.cast-card{flex:0 0 auto;width:108px;text-align:center}.cast-avatar{width:90px;height:90px;object-fit:cover;border-radius:50%;border:2px solid rgba(148,163,184,.22);background:#1e2a3a;display:block;margin:0 auto}.cast-placeholder{width:90px;height:90px;border-radius:50%;border:2px solid rgba(148,163,184,.18);background:linear-gradient(180deg,#1e2a3a 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:.7rem;margin:0 auto}.cast-name{margin-top:9px;color:#f1f5f9;font-size:.82rem;font-weight:700;line-height:1.25;word-break:break-word}.cast-role{margin-top:3px;color:#64748b;font-size:.72rem;line-height:1.2;word-break:break-word}.season-card{display:flex;gap:14px;border:1px solid rgba(148,163,184,.10);border-radius:18px;padding:12px;background:rgba(255,255,255,.03);margin-bottom:12px}.season-poster{width:92px;min-width:92px;height:132px;object-fit:cover;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:#1f2937}.season-placeholder{width:92px;min-width:92px;height:132px;border-radius:12px;border:1px solid rgba(148,163,184,.10);background:linear-gradient(180deg,#1f2937 0,#111827 100%);display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.74rem;text-align:center;padding:6px}.season-title{color:#f8fafc;font-size:.98rem;font-weight:780;line-height:1.25}.season-meta{color:#94a3b8;font-size:.78rem;margin-top:4px}.season-overview{color:#dbe4ee;font-size:.9rem;line-height:1.6;margin-top:8px}.hero-meta-grid{display:flex;gap:32px;flex-wrap:wrap;margin-top:18px;margin-bottom:20px}.hero-meta-col{min-width:80px}.hero-meta-label{color:#94a3b8;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}.hero-meta-value{color:#f1f5f9;font-size:.97rem;font-weight:600;line-height:1.3}.hero-action-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:all .18s}.hero-action-primary{background:#7c3aed;color:#fff}.hero-action-primary:hover{background:#6d28d9}.hero-action-secondary{background:rgba(255,255,255,.10);color:#f1f5f9;border:1px solid rgba(255,255,255,.16)}.hero-action-secondary:hover{background:rgba(255,255,255,.18)}.hero-actions{display:flex;flex-direction:column;gap:10px;min-width:220px;margin-top:10px}
 </style>
 """
 
@@ -801,18 +801,20 @@ def get_sheets():
 
 
 def get_sheets_safe():
-    """Wrapper around get_sheets() that isolates failures (M8).
-    A transient auth/network error no longer nukes the shared cache_resource
-    for every concurrent user — it's caught here and surfaced with a clean
-    message, with the option to retry without invalidating other sessions."""
+    """Wrapper around get_sheets that isolates failures (M8).
+
+    On success:
+        returns (entries_ws, votes_ws)
+
+    On failure:
+        returns (None, error_message)
+    """
     try:
-        return get_sheets(), None
+        entries_ws, votes_ws = get_sheets()   # unpack the tuple here
+        return entries_ws, votes_ws
     except SchemaMismatchError as e:
         return None, str(e)
     except Exception as e:
-        # Only clear the shared cache if the connection itself is broken —
-        # not on every failure, so one rate-limited request doesn't force
-        # every other concurrent user to re-authenticate too.
         st.cache_resource.clear()
         return None, f"Could not connect to Google Sheets: {e}"
 
@@ -1281,20 +1283,31 @@ def page_add_entry(entries_ws, current_name: str):
                     "watched_with": watched_with.strip() if watched_with else "",
                     "tmdb_id": st.session_state.get("pf_tmdb_id", ""),
                 }
-
                 try:
                     append_row(entries_ws, row)
                     read_entries.clear()
-
-                    for k in ["pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"]:
+                    # Clear TMDB prefill state
+                    for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"):
                         st.session_state.pop(k, None)
-
                     st.session_state.pop(dup_key, None)
-                    st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
-                    st.success(f'"{title.strip()}" saved! Add another below.')
+                    st.session_state["add_form_reset"] = st.session_state.get("add_form_reset", 0) + 1
+                    # Show a popup dialog confirming the save
+                    @st.dialog("Entry added")
+                    def entry_added_dialog():
+                        st.write(f"**{title.strip()}** has been saved to your MediaLog.")
+                        d1, d2 = st.columns(2)
+                        with d1:
+                            if st.button("Add another", type="primary", use_container_width=True):
+                                st.rerun()
+                        with d2:
+                            if st.button("Go to Browse", use_container_width=True):
+                            # Switch to Browse page on next rerun
+                                st.session_state["prev_page"] = "Browse"
+                                st.rerun()
+                    entry_added_dialog()
+                    st.stop()  # stop the rest of the page until user dismisses the dialog
                 except Exception as e:
                     st.error(f"Error saving entry: {e}")
-
 
 # ─────────────────────────────────────────────
 #  PAGE: BROWSE (FIX #4: pagination reset, FIX #5: stable picks, Enhancement #3: sort)
@@ -1835,90 +1848,80 @@ def _inject_card_css():
 
 def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render_scope="main"):
     _inject_card_css()
+
     if filtered.empty:
         st.info("No entries match the current filters.")
         return
+
     voter_name = st.session_state.get("voter_name", "").strip()
     current_user = st.session_state.get("username", "").strip()
 
     for idx, (_, row) in enumerate(filtered.iterrows()):
-        title = str(row.get("title", "") or "").strip()
+        # Basic fields
+        raw_title = str(row.get("title", "") or "").strip()
         media_type = normalize_media_type(row.get("type", "Movie"))
         platform = str(row.get("platform", "") or "").strip()
         genre = str(row.get("genre", "") or "").strip()
-        recommend = str(row.get("recommend", "") or "").strip().lower()
         raw_status = row.get("status", "")
         status_key = str(raw_status).strip().lower() if pd.notna(raw_status) else ""
         raw_rating = row.get("rating", "")
-        rating_text = ""
-        if pd.notna(raw_rating) and str(raw_rating).strip() != "":
-            rating_text = str(raw_rating).strip()
-        status_color_map = {
-            "watched": "var(--success)",
-            "watching": "var(--warning)",
-            "plan": "var(--info)",
-		}
-        status_color = status_color_map.get(status_key, "var(--border)")
-        raw_entry_id = row.get("entry_id", 0)
+
+        # Resolve entry_id and handle corrupted IDs early
         entry_id = _resolve_entry_id(row)
         if entry_id is None:
             st.markdown(
                 f'<div class="wlog-card"><span style="color:#f87171;font-size:.85rem;">'
-                f'⚠ "{html.escape(title)}" has a corrupted entry_id — '
+                f'⚠ "{html.escape(raw_title)}" has a corrupted entry_id — '
                 f'skipped. Ask an admin to repair this row.</span></div>',
                 unsafe_allow_html=True,
             )
             continue  # skip vote/edit/delete widgets for this row entirely
-        with st.container():
-            st.markdown(card_html, unsafe_allow_html=True)  # existing card markup
-            col_a, col_b = st.columns([1, 1])
-            with col_a:
-                if st.button("🔍 View Details", key=f"view_details_{entry_id}", use_container_width=True):
-                    st.session_state["selected_entry_id"] = entry_id
-                    st.session_state["selected_entry_title"] = title_txt
-                    st.session_state["selected_entry_type"] = type_txt
-                    st.rerun()
-            with col_b:
-                pass  # vote buttons here if applicable
-            st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
-        title_txt      = row.get("title",    "—")
-        type_txt       = (row.get("type",    "") or "").title()
-        genre_txt      = row.get("genre",    "") or "—"
-        added_by_txt   = row.get("added_by", "") or "Unknown"
-        comments_txt   = row.get("comments", "") or ""
-        poster_url     = row.get("poster_url", "") or ""
-        watched_with   = row.get("watched_with", "") or ""
+
+        # Display text (card body)
+        title_txt     = row.get("title", "—") or "—"
+        # Use normalized media type for nicer label
+        type_txt      = "Movie" if media_type == MEDIA_TYPE_MOVIE else "Web Series"
+        genre_txt     = row.get("genre", "") or "—"
+        added_by_txt  = row.get("added_by", "") or "Unknown"
+        comments_txt  = row.get("comments", "") or ""
+        poster_url    = row.get("poster_url", "") or ""
+        watched_with  = row.get("watched_with", "") or ""
+
         platform_html  = platform_badge(row.get("platform", ""))
         rating_html    = rating_stars(row.get("rating"))
-        status_html    = status_badge(row.get("status",    ""))
+        status_html    = status_badge(row.get("status", ""))
         recommend_html = recommend_badge(row.get("recommend", ""))
 
-    # XSS protection
-        title_txt    = html.escape(str(title_txt))
-        type_txt     = html.escape(str(type_txt))
-        genre_txt    = html.escape(str(genre_txt))
-        added_by_txt = html.escape(str(added_by_txt))
-        comments_txt = html.escape(str(comments_txt))
-        watched_with = html.escape(str(watched_with))
+        # XSS protection
+        title_txt     = html.escape(str(title_txt))
+        type_txt      = html.escape(str(type_txt))
+        genre_txt     = html.escape(str(genre_txt))
+        added_by_txt  = html.escape(str(added_by_txt))
+        comments_txt  = html.escape(str(comments_txt))
+        watched_with  = html.escape(str(watched_with))
 
-        counts   = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-        comm_bar = community_bar(counts["yes"], counts["no"])
+        # Vote summary
+        counts    = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+        comm_bar  = community_bar(counts["yes"], counts["no"])
 
-          # ENHANCEMENT #6: spoiler toggle for reviews
+        # ENHANCEMENT #6: spoiler toggle for reviews
         review_html = ""
         if comments_txt:
-              review_html = (
-                  f'<details style="margin-top:4px;">'
-                  f'<summary style="font-size:0.78rem;color:#94a3b8;cursor:pointer;">💬 Show review</summary>'
-                  f'<div class="wlog-card-review">{comments_txt}</div>'
-                  f'</details>'
-              )
+            review_html = (
+                f'<details style="margin-top:4px;">'
+                f'<summary style="font-size:0.78rem;color:#94a3b8;cursor:pointer;">💬 Show review</summary>'
+                f'<div class="wlog-card-review">{comments_txt}</div>'
+                f'</details>'
+            )
 
-          # ENHANCEMENT #10: show "watched with" info
+        # ENHANCEMENT #10: show "watched with" info
         watched_with_html = ""
         if watched_with:
-              watched_with_html = f'<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px;">👥 {watched_with}</span>'
+            watched_with_html = (
+                f'<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px;">👥 {watched_with}</span>'
+            )
 
+        # Build the inner card layout
         if poster_url:
             img_html = (
                 f'<img src="{html.escape(poster_url)}" width="54" height="80" '
@@ -1946,64 +1949,59 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
             </div>
             """
         else:
-              card_inner = f"""
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-    <div>
-      <span class="wlog-card-title">{title_txt}</span>
-      <span class="wlog-card-meta">{type_txt} ·  - {genre_txt}</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:5px;"> - {platform_html}</div>
-  </div>
-  <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-    {rating_html} {recommend_html} {status_html}
-  </div>
-  {review_html}
-  <div style="margin-top:6px;">{comm_bar}</div>
-  <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>"""
+            card_inner = f"""
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <span class="wlog-card-title">{title_txt}</span>
+                    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+            </div>
+            <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+                {rating_html} {recommend_html} {status_html}
+            </div>
+            {review_html}
+            <div style="margin-top:6px;">{comm_bar}</div>
+            <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
+            """
 
-        card_html = re.sub(r'\s+', ' ', f'<div class="wlog-card">{card_inner}</div>').strip()
-        st.markdown(card_html, unsafe_allow_html=True)
+        # Wrap inner layout and normalize whitespace → card_html
+        raw_card_html = f'<div class="wlog-card">{card_inner}</div>'
+        card_html = re.sub(r"\s+", " ", raw_card_html).strip()
 
-        CLICKABLE_CARD_CSS = """
-    <style>
-    .wlog-card {
-        transition: var(--transition);
-        cursor: pointer;
-    }
-    .wlog-card:hover {
-        border-color: var(--border-strong);
-        box-shadow: var(--shadow-sm);
-        transform: translateY(-1px);
-    }
-/* Make the "View Details" button look like a full pill,
-   not a cramped narrow button */
-    div[data-testid="stButton"] > button[kind="secondary"] {
-        width: 100%;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border);
-        background: var(--surface-2);
-        color: var(--text);
-        font-weight: 600;
-        padding: 8px 14px;
-        transition: var(--transition);
-    }
-    div[data-testid="stButton"] > button[kind="secondary"]:hover {
-        background: var(--accent-soft);
-        border-color: var(--accent);
-        color: var(--text);
-    }
-    </style>
-    """
-    VOTE_CSS = """<style>
-      .vote-btn-wrap button { min-height:44px !important; min-width:44px !important; font-size:1.1rem !important; border-radius:10px !important; }
-      </style>"""
-        # Vote + Edit/Delete row
-    with st.expander("Vote / Manage", expanded=False):
-            _render_vote_widget(entry_id, title_txt, voter_name, votes_df, votes_ws, counts["yes"], counts["no"], idx, render_scope)
-            if current_user and current_user.lower() == row.get("added_by", "").strip().lower():
-                _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
+        # Render card + actions
+        with st.container():
+            st.markdown(card_html, unsafe_allow_html=True)
 
-    st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
+            col_a, col_b = st.columns([1, 1])
+            with col_a:
+                if st.button("🔍 View Details", key=f"view_details_{render_scope}_{entry_id}_{idx}", use_container_width=True,):
+                    st.session_state["selected_entry_id"] = entry_id
+                    st.session_state["selected_entry_title"] = title_txt
+                    st.session_state["selected_entry_type"] = media_type
+                    st.rerun()
+
+            with col_b:
+                # Vote + Edit/Delete row
+                with st.expander("Vote / Manage", expanded=False):
+                    _render_vote_widget(
+                        entry_id,
+                        title_txt,
+                        voter_name,
+                        votes_df,
+                        votes_ws,
+                        counts["yes"],
+                        counts["no"],
+                        idx,
+                        render_scope,
+                    )
+                    if (
+                        current_user
+                        and current_user.lower()
+                        == (row.get("added_by", "") or "").strip().lower()
+                    ): _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
+
+        st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
 def _selectbox_preserve(label, options, current, key=None):
     """Selectbox that never silently discards an off-list current value (H1)."""
@@ -2016,115 +2014,19 @@ def _selectbox_preserve(label, options, current, key=None):
   # ─────────────────────────────────────────────
   #  ENHANCEMENT #1: EDIT/DELETE WIDGET
   # ─────────────────────────────────────────────
-def _render_edit_delete(entry_id, row, entries_ws, card_idx, render_scope):
-      scope = render_scope or "default"
-      edit_key = f"editing_{entry_id}_{scope}"
+def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_scope):
+    scope = render_scope or "default"
+    edit_key = f"editing_{entry_id}_{scope}"
+    col_edit, col_del, _ = st.columns([1, 1, 8])
 
-      col_edit, col_del, _ = st.columns([1, 1, 8])
-      with col_edit:
-          if st.button("✏️", key=f"edit_btn_{entry_id}_{card_idx}_{scope}",
-                       help="Edit this entry"):
-              st.session_state[edit_key] = True
-              st.rerun()
-      with col_del:
-          if st.button("🗑", key=f"del_btn_{entry_id}_{card_idx}_{scope}",
-                       help="Delete this entry"):
-              confirm_key = f"confirm_del_{entry_id}_{scope}"
-              st.session_state[confirm_key] = True
-              st.rerun()
-
-      # Delete confirmation
-      confirm_key = f"confirm_del_{entry_id}_{scope}"
-      if st.session_state.get(confirm_key):
-          st.warning(f"Are you sure you want to delete **{html.escape(str(row.get('title', '')))}**?")
-          c_yes, c_no, _ = st.columns([1, 1, 8])
-          with c_yes:
-              if st.button("Yes, delete", key=f"confirm_yes_{entry_id}_{scope}", type="primary"):
-                try:
-                    row_idx = find_row_index(entries_ws, entry_id)
-                    if row_idx is not None:
-                        delete_row(entries_ws, row_idx)
-                        read_entries.clear()
-                        votes_df_now = read_votes(votes_ws)
-                        delete_votes_for_entry(votes_ws, votes_df_now, entry_id)  # M5
-                        st.session_state.pop(confirm_key, None)
-                        st.success("Deleted.")
-                        st.rerun()
-                    else:
-                        st.error("Could not find entry in sheet.")
-                except Exception as e:
-                    st.error(f"Delete failed: {e}")
-          with c_no:
-              if st.button("Cancel", key=f"confirm_no_{entry_id}_{scope}"):
-                  st.session_state.pop(confirm_key, None)
-                  st.rerun()
-
-      # Inline edit form
-      if st.session_state.get(edit_key):
-          with st.form(f"edit_form_{entry_id}_{scope}"):
-              st.markdown(f"**Editing: {html.escape(str(row.get('title', '')))}**")
-              new_title = st.text_input("Title", value=row.get("title", ""))
-              ec1, ec2, ec3 = st.columns(3)
-              with ec1:
-                  new_platform = _selectbox_preserve(
-                      "Platform", PLATFORMS, row.get("platform", ""),
-                      key=f"edit_platform_{entry_id}_{scope}",
-                  )
-              with ec2:
-                  cur_status = str(row.get("status", "") or "").strip().lower()
-                  new_status = _selectbox_preserve("Status", ["watched", "watching", "plan"], cur_status,
-                      key=f"edit_status_{entry_id}_{scope}",
-                  )
-              with ec3:
-                  cur_rating = row.get("rating", 8)
-                  try:
-                      cur_rating = int(float(cur_rating)) if pd.notna(cur_rating) else 8
-                  except (ValueError, TypeError):
-                      cur_rating = 8
-                  new_rating = st.slider("Rating", 1, 10, cur_rating)
-
-              new_comments = st.text_area("Review", value=row.get("comments", "") or "")
-
-              sub_col1, sub_col2 = st.columns(2)
-              with sub_col1:
-                    if st.form_submit_button("Save changes", type="primary"):
-                        try:
-                            try:
-                                row_idx = find_row_index(entries_ws, entry_id)
-                            except RowLookupError as e:
-                                st.error(f"Could not verify entry location: {e}")
-                                row_idx = None
-                            if row_idx is None:
-                                st.error("Could not find entry.")
-                            elif _row_snapshot_changed(entries_ws, row_idx, row):
-                                st.warning("This entry was changed by someone else since you opened it. Reload and try again.")
-                                st.session_state.pop(edit_key, None)
-                            else:
-                                updated = {c: row.get(c, "") for c in COLUMNS}
-                                updated["title"] = new_title.strip()
-                                updated["platform"] = new_platform
-                                updated["status"] = new_status
-                                updated["comments"] = new_comments.strip()
-
-                                # M3 fix — clear dependent fields when moving to "plan"
-                                if new_status == "plan":
-                                    updated["rating"] = ""
-                                    updated["recommend"] = ""
-                                    updated["watched_year"] = ""
-                                else:
-                                    updated["rating"] = new_rating
-
-                                update_row(entries_ws, row_idx, updated)
-                                read_entries.clear()
-                                st.session_state.pop(edit_key, None)
-                                st.success("Updated!")
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"Update failed: {e}")
-              with sub_col2:
-                  if st.form_submit_button("Cancel"):
-                      st.session_state.pop(edit_key, None)
-                      st.rerun()
+    with col_edit:
+        if st.button(
+            "✏️ Edit",
+            key=f"edit_btn_{entry_id}_{card_idx}_{scope}",
+            help="Edit this entry",
+        ):
+            st.session_state[edit_key] = True
+            st.rerun()
 
 
   # ─────────────────────────────────────────────
