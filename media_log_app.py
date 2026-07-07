@@ -61,6 +61,13 @@ outline-offset: 2px !important;
 border-radius: var(--radius-sm) !important;
 }
 </style>
+<style>
+.wlog-divider {
+    border: none;
+    border-top: 1px solid rgba(148,163,184,0.15);
+    margin: 14px 0;
+}
+</style>
 """
 
 CLICKABLE_CARD_CSS = """
@@ -952,70 +959,89 @@ def find_row_index(ws, entry_id) -> int:
         raise RowLookupError(f"Could not verify row for entry_id {entry_id}: {e}")
     return cell.row if cell else None
 
+def ensure_username() -> bool:
+    """Capture and persist the user's name. Returns True when ready."""
+
+    # 1) Make sure the keys exist in session_state
+    if "username" not in st.session_state:
+        st.session_state["username"] = ""
+    if "voter_name" not in st.session_state:
+        st.session_state["voter_name"] = st.session_state["username"]
+
+    # 2) If we don't have a name yet, show the welcome gate
+    if not st.session_state["username"].strip():
+        st.sidebar.markdown("### Welcome!")
+        name_input = st.sidebar.text_input(
+            "Your name",
+            key="name_entry",
+            placeholder="e.g. Pankaj",
+        )
+
+        # User typed something → store it and rerun
+        if name_input.strip():
+            cleaned = name_input.strip()
+            st.session_state["username"] = cleaned
+            st.session_state["voter_name"] = cleaned
+            st.rerun()
+
+        # Username not ready yet → tell caller to stop
+        return False
+
+    # 3) We DO have a name: show it and allow changing it
+    display_name = st.session_state["username"].strip()
+    st.sidebar.markdown(f"👤 **{html.escape(display_name)}**")
+
+    if st.sidebar.button("Change name", key="change_name_btn"):
+        st.session_state["username"] = ""
+        st.session_state["voter_name"] = ""
+        st.rerun()
+
+    return True
 
   # ─────────────────────────────────────────────
   #  SIDEBAR
   # ─────────────────────────────────────────────
 def render_sidebar():
-      """Render sidebar navigation + single name input. Returns (page, name)."""
-      st.sidebar.markdown(
-          '<div style="display:flex;align-items:center;gap:10px;padding:4px 0 12px 0;">'
-          '<span style="font-size:1.7rem;">🎬</span>'
-          '<span style="font-size:1.15rem;font-weight:800;color:#f1f5f9;">MediaLog</span>'
-          '</div>',
-          unsafe_allow_html=True,
-      )
-      if st.sidebar.button("🏠 Home", use_container_width=True, key="logo_home_btn"):
-          for _k in ["selected_entry_id","selected_entry_title","selected_entry_type"]:
-              st.session_state.pop(_k, None)
-          st.rerun()
-          SIDEBAR_NAV_CSS = """
-    <style>
-    section[data-testid="stSidebar"] div[role="radiogroup"] {
-    gap: 4px;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label {
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        padding: 10px 14px !important;
-        margin-bottom: 4px;
-        transition: var(--transition);
-        width: 100%;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        border-color: var(--border-strong);
-        background: var(--surface-3);
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background: var(--accent-soft);
-        border-color: var(--accent);
-    }
-    </style>
-    """
-      page = st.sidebar.radio("Navigate", ["Browse", "Add Entry", "Reports"], index=0)
-      prev_page = st.session_state.get("prev_page")
-      if prev_page is not None and prev_page != page:
-            _clear_detail_view_state()
-      st.session_state["prev_page"] = page
-      st.sidebar.divider()
+    """Render sidebar navigation. Returns (page, current_name)."""
 
-      stored = st.session_state.get("username", "")
-      name_in = st.sidebar.text_input(
-          "Your name",
-          value=stored,
-          placeholder="e.g. Pankaj",
-          help="Used for adding entries and for voting. Enter once.",
-          key="sidebar_name_widget",
-      )
-      name = name_in.strip()
-      if name:
-          st.session_state["username"]    = name
-          st.session_state["saved_name"]   = name
-          st.session_state["voter_name"]   = name
-          st.session_state["sidebar_name"] = name
+    # Logo / title
+    st.sidebar.markdown(
+        """
+        <div style="display:flex;align-items:center;gap:10px;padding:4px 0 12px 0;">
+          <span style="font-size:1.7rem;">🎬</span>
+          <span style="font-size:1.15rem;font-weight:800;color:#f1f5f9;">MediaLog</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-      return page, name
+    # Home button resets detail view state
+    if st.sidebar.button("🏠 Home", use_container_width=True, key="logo_home_btn"):
+        for k in ("selected_entry_id", "selected_entry_title", "selected_entry_type"):
+            st.session_state.pop(k, None)
+        st.rerun()
+
+    # Navigation radio
+    page = st.sidebar.radio(
+        "Navigate",
+        ["Browse", "Add Entry", "Reports"],
+        index=0,
+    )
+
+    # Remember last page to clear detail view when changing pages
+    prev_page = st.session_state.get("prev_page")
+    if prev_page is not None and prev_page != page:
+        _clear_detail_view_state()
+    st.session_state["prev_page"] = page
+
+    st.sidebar.divider()
+
+    # Show current username (ensure_username() already handled setting it)
+    current_name = st.session_state.get("username", "").strip()
+    if current_name:
+        st.sidebar.markdown(f"👤 **{html.escape(current_name)}**")
+
+    return page, current_name
 
 
 # ─────────────────────────────────────────────
@@ -1843,6 +1869,18 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
                 unsafe_allow_html=True,
             )
             continue  # skip vote/edit/delete widgets for this row entirely
+        with st.container():
+            st.markdown(card_html, unsafe_allow_html=True)  # existing card markup
+            col_a, col_b = st.columns([1, 1])
+            with col_a:
+                if st.button("🔍 View Details", key=f"view_details_{entry_id}", use_container_width=True):
+                    st.session_state["selected_entry_id"] = entry_id
+                    st.session_state["selected_entry_title"] = title_txt
+                    st.session_state["selected_entry_type"] = type_txt
+                    st.rerun()
+            with col_b:
+                pass  # vote buttons here if applicable
+            st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
         title_txt      = row.get("title",    "—")
         type_txt       = (row.get("type",    "") or "").title()
         genre_txt      = row.get("genre",    "") or "—"
@@ -1855,7 +1893,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
         status_html    = status_badge(row.get("status",    ""))
         recommend_html = recommend_badge(row.get("recommend", ""))
 
-          # XSS protection
+    # XSS protection
         title_txt    = html.escape(str(title_txt))
         type_txt     = html.escape(str(type_txt))
         genre_txt    = html.escape(str(genre_txt))
@@ -2189,107 +2227,43 @@ def _render_table(filtered, vote_summary):
           unsafe_allow_html=True,
       )
       st.markdown(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-
+            
   # ─────────────────────────────────────────────
   #  MAIN
   # ─────────────────────────────────────────────
 def main():
-    st.set_page_config(page_title="What Am I Watching?", page_icon="🎬", layout="wide")
-
-    if "username" not in st.session_state:
-        st.session_state["username"] = ""
-    if "voter_name" not in st.session_state:
-        st.session_state["voter_name"] = ""
-
-    @st.dialog("Welcome! What's your name?")
-    def name_dialog():
-        n = st.text_input("Your name", value=st.session_state.get("username", ""), placeholder="e.g. Pankaj")
-        if st.button("Continue", type="primary", use_container_width=True):
-            cleaned = n.strip()
-            if cleaned:
-                st.session_state["username"] = cleaned
-                st.session_state["voter_name"] = cleaned
-                st.rerun()
-            else:
-                st.warning("Please enter a name.")
-
-    if not st.session_state.get("username", "").strip():
-        name_dialog()
-
-    gs = st.text_input(
-        "Search",
-        value=st.session_state.get("browse_search", ""),
-        placeholder="Search movies or web series...",
-        key="global_search_top",
-        label_visibility="collapsed",
+    # 1) Streamlit page config
+    st.set_page_config(
+        page_title="What Am I Watching?",
+        page_icon="🎬",
+        layout="wide",
     )
-    st.session_state["browse_search"] = gs
-    st.markdown("""
-<style>
-.compact-home h1 {
-    font-size: 2.7rem !important;
-    line-height: 1.05 !important;
-    margin: 0 0 0.2rem 0 !important;
-}
-.compact-home p {
-    margin: 0 !important;
-}
-.compact-home {
-    padding: 0.1rem 0 0.35rem 0;
-}
-.compact-tip {
-    padding: 0.55rem 0.8rem;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 12px;
-    margin: 0.45rem 0 0.35rem 0;
-    background: rgba(255, 255, 255, 0.02);
-}
-div[data-testid="stTextInput"] {
-    margin-bottom: 0.35rem;
-}
-</style>
-""", unsafe_allow_html=True)
-    username = st.session_state.get("username", "").strip()
-    st.markdown('<div class="compact-home">', unsafe_allow_html=True)
-    st.markdown("# 🎬 What Am I Watching?")
-    st.caption("A shared log for movies & web series across all OTT platforms. ")
-    if st.session_state.get("username"):
-        st.caption(f"👤 Logged in as **{st.session_state['username']}**")
-    st.markdown("</div>", unsafe_allow_html=True)
-    if not st.session_state.get("onboarded"):
-        st.markdown('<div class="compact-tip">', unsafe_allow_html=True)
-        with st.container(border=True):
-            st.markdown("**New here?** 1) Log what you watch in **Add Entry** → 2) Browse & vote on friends' picks → 3) Check **View Details on each card** for Trailer, Cast and more info")
-            if st.button("Got it", key="dismiss_onboarding"):
-                st.session_state["onboarded"] = True
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-    result, err = get_sheets_safe()
-    if err:
-        st.error(f"⚠ App cannot start: {err}")
-        st.stop()
-    entries_ws, votes_ws = result
 
+    # 2) Welcome / username gate
+    ready = ensure_username()
+    if not ready:
+        # Still on the welcome screen; don't render the rest yet
+        return
+
+    # 3) Connect to Google Sheets
+    entries_ws, votes_ws_or_error = get_sheets_safe()
+    if entries_ws is None:
+        # votes_ws_or_error here is actually the error message
+        st.error(votes_ws_or_error or "Could not connect to Google Sheets.")
+        return
+    votes_ws = votes_ws_or_error
+
+    # 4) Sidebar and navigation
     page, current_name = render_sidebar()
-
     render_back_to_top_button()
+
+    # 5) Route to selected page
     if page == "Add Entry":
         page_add_entry(entries_ws, current_name)
     elif page == "Reports":
         page_reports(entries_ws)
-    else:
+    else:  # "Browse"
         page_browse(entries_ws, votes_ws)
-    st.sidebar.divider()
-    st.sidebar.markdown(
-          "**How it works**\n"
-          "- Log what you watch in **Add Entry**\n"
-          "- Browse & filter in **Browse**\n"
-          "- 👍/👎 vote on any entry\n"
-          "- See charts in **Reports**\n"
-          "- Share this URL with friends"
-      )
-
 
 if __name__ == "__main__":
       main()
