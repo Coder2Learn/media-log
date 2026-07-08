@@ -1999,7 +1999,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
                         current_user
                         and current_user.lower()
                         == (row.get("added_by", "") or "").strip().lower()
-                    ): _render_edit_delete(entry_id, row, entries_ws, idx, render_scope)
+                    ): _render_edit_delete(entry_id, row, entries_ws, votes_ws, idx, render_scope)
 
         st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
@@ -2015,10 +2015,11 @@ def _selectbox_preserve(label, options, current, key=None):
   #  ENHANCEMENT #1: EDIT/DELETE WIDGET
   # ─────────────────────────────────────────────
 def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_scope):
+    """Edit-only controls for an entry; delete is disabled."""
     scope = render_scope or "default"
     edit_key = f"editing_{entry_id}_{scope}"
-    col_edit, col_del, _ = st.columns([1, 1, 8])
 
+    col_edit, _, _ = st.columns([1, 1, 8])
     with col_edit:
         if st.button(
             "✏️ Edit",
@@ -2026,6 +2027,23 @@ def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_sc
             help="Edit this entry",
         ):
             st.session_state[edit_key] = True
+            st.rerun()
+
+    if not st.session_state.get(edit_key):
+        return
+
+    # Inline edit form (your existing update logic goes here)
+    with st.form(f"edit_form_{entry_id}_{scope}", clear_on_submit=False):
+        ...
+        if st.form_submit_button("Save changes", type="primary"):
+            ...
+            update_row(entries_ws, row_idx, updated)
+            read_entries.clear()
+            st.session_state.pop(edit_key, None)
+            st.success("Updated!")
+            st.rerun()
+        if st.form_submit_button("Cancel"):
+            st.session_state.pop(edit_key, None)
             st.rerun()
 
 
