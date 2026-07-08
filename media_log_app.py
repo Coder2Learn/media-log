@@ -243,6 +243,28 @@ SORT_OPTIONS = {
     "Most Voted": ("_total_votes", False),
 }
 
+def _safe_sort(df: pd.DataFrame, sort_col: str, sort_asc: bool) -> pd.DataFrame:
+    """
+    Robust sort for the Browse page.
+    - For 'title': sort by a normalized string key (lowercase, stripped), so mixed types
+      in the column can't break Pandas.
+    - For other columns: fall back to normal sort_values.
+    """
+    if sort_col == "title":
+        # Build a temporary normalized key
+        tmp = (
+            df["title"]
+            .fillna("")        # None → empty
+            .astype(str)       # anything → string
+            .str.strip()
+            .str.lower()
+        )
+        df = df.assign(_title_sort_key=tmp)
+        df = df.sort_values("_title_sort_key", ascending=sort_asc, na_position="last")
+        return df.drop(columns=["_title_sort_key"])
+
+    # Default path for rating, timestamp, _total_votes, etc.
+    return df.sort_values(sort_col, ascending=sort_asc, na_position="last")
 TMDB_GENRE_MAP_MOVIE = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 27: "Horror",
@@ -1540,7 +1562,7 @@ def page_browse(entries_ws, votes_ws):
         my_name = st.session_state.get("username", "").strip()
         sort_choice = st.selectbox("Sort by", list(SORT_OPTIONS.keys()), index=0, key="sort_select")
 
-        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+        fc1, fc2, fc3, fc4, fc5, fc6 = st.columns(6)
         with fc1:
             plat_f = st.multiselect("Platform", PLATFORMS, key="f_plat")
         with fc2:
@@ -1551,6 +1573,10 @@ def page_browse(entries_ws, votes_ws):
             rec_f = st.multiselect("Rec", ["yes", "no"], key="f_rec")
         with fc5:
             genre_f = st.multiselect("Genre", GENRES_LIST, key="f_genre")
+        with fc6:
+            lang_f = st.multiselect("Language", LANGUAGES, key="f_lang")
+
+
 
         active_count = sum([
             bool(plat_f),
@@ -1558,6 +1584,7 @@ def page_browse(entries_ws, votes_ws):
             bool(stat_f),
             bool(rec_f),
             bool(genre_f),
+            bool(lang_f),
             preset != "All",
             show_mine,
         ])
@@ -1582,6 +1609,8 @@ def page_browse(entries_ws, votes_ws):
         filtered = filtered[filtered["title"].str.contains(search_text, case=False, na=False, regex=False)]
     if plat_f and "platform" in filtered.columns:
         filtered = filtered[filtered["platform"].isin(plat_f)]
+    if lang_f and "language" in filtered.columns:
+        filtered = filtered[filtered["language"].isin(lang_f)]
     if type_f and "type" in filtered.columns:
         filtered = filtered[filtered["type"].isin(type_f)]
     if stat_f and "status" in filtered.columns:
@@ -1600,22 +1629,46 @@ def page_browse(entries_ws, votes_ws):
 
 # ENHANCEMENT #3: Apply sort
     sort_col, sort_asc = SORT_OPTIONS[sort_choice]
+
     if sort_col == "_total_votes":
         def _safe_eid(eid):
             v = pd.to_numeric(eid, errors="coerce")
             return int(v) if pd.notna(v) else None
+
         filtered["_total_votes"] = filtered["entry_id"].apply(
             lambda eid: sum(vote_summary.get(_safe_eid(eid), {"yes": 0, "no": 0}).values())
         )
-        filtered = filtered.sort_values("_total_votes", ascending=sort_asc).drop(columns=["_total_votes"])
+        filtered = (
+            filtered.sort_values("_total_votes", ascending=sort_asc)
+            .drop(columns=["_total_votes"])
+        )
     elif sort_col == "rating" and "rating" in filtered.columns:
         filtered["_rating_num"] = pd.to_numeric(filtered["rating"], errors="coerce").fillna(0)
-        filtered = filtered.sort_values("_rating_num", ascending=sort_asc).drop(columns=["_rating_num"])
+        filtered = (
+            filtered.sort_values("_rating_num", ascending=sort_asc)
+            .drop(columns=["_rating_num"])
+        )
+
+    elif sort_col == "title" and "title" in filtered.columns:
+    # Safe title sort: normalize everything to strings before sorting
+        tmp = (
+            filtered["title"]
+            .fillna("")      # None → empty string
+            .astype(str)     # numbers, etc. → string
+            .str.strip()
+            .str.lower()
+        )
+        filtered["_title_sort_key"] = tmp
+        filtered = (
+            filtered.sort_values("_title_sort_key", ascending=sort_asc, na_position="last")
+            .drop(columns=["_title_sort_key"])
+        )
+
     elif sort_col in filtered.columns:
         filtered = filtered.sort_values(sort_col, ascending=sort_asc, na_position="last")
 
       # FIX #4: Detect filter changes and reset pagination
-    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{sort_choice}"
+    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f} |{lang_f}|{sort_choice}"
     if st.session_state.get("_last_filter_sig") != current_filter_sig:
         st.session_state["_last_filter_sig"] = current_filter_sig
         for k in list(st.session_state.keys()):
@@ -2015,10 +2068,19 @@ def _selectbox_preserve(label, options, current, key=None):
   #  ENHANCEMENT #1: EDIT/DELETE WIDGET
   # ─────────────────────────────────────────────
 def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_scope):
-    """Edit-only controls for an entry; delete is disabled."""
+    """
+    Edit-only controls for an entry. Delete has been removed.
+    - entry_id: int ID of the entry
+    - row: dict-like record from the entries DataFrame
+    - entries_ws: gspread worksheet for Entries
+    - votes_ws: gspread worksheet for Votes (currently unused here)
+    - card_idx: index of the card in the current page
+    - render_scope: string key for scoping widget IDs
+    """
     scope = render_scope or "default"
     edit_key = f"editing_{entry_id}_{scope}"
 
+    # Top-level Edit button on the card
     col_edit, _, _ = st.columns([1, 1, 8])
     with col_edit:
         if st.button(
@@ -2029,20 +2091,96 @@ def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_sc
             st.session_state[edit_key] = True
             st.rerun()
 
+    # If not in editing mode, nothing more to do
     if not st.session_state.get(edit_key):
         return
 
-    # Inline edit form (your existing update logic goes here)
+    # Inline edit form
     with st.form(f"edit_form_{entry_id}_{scope}", clear_on_submit=False):
-        ...
-        if st.form_submit_button("Save changes", type="primary"):
-            ...
-            update_row(entries_ws, row_idx, updated)
-            read_entries.clear()
-            st.session_state.pop(edit_key, None)
-            st.success("Updated!")
-            st.rerun()
-        if st.form_submit_button("Cancel"):
+        st.markdown(f"**Editing:** {html.escape(str(row.get('title', '')))}")
+
+        # Basic fields
+        new_title = st.text_input("Title", value=row.get("title", "") or "")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            # Use your existing helper to preserve off-list values
+            new_platform = _selectbox_preserve(
+                "Platform",
+                PLATFORMS,
+                row.get("platform", ""),
+                key=f"edit_platform_{entry_id}_{scope}",
+            )
+
+        with col2:
+            current_status = str(row.get("status", "") or "").strip().lower()
+            new_status = _selectbox_preserve(
+                "Status",
+                ["watched", "watching", "plan"],
+                current_status,
+                key=f"edit_status_{entry_id}_{scope}",
+            )
+
+        with col3:
+            raw_rating = row.get("rating", "")
+            try:
+                base_rating = int(float(raw_rating)) if str(raw_rating).strip() else 8
+            except ValueError:
+                base_rating = 8
+            new_rating = st.slider("Rating", 1, 10, base_rating)
+
+        new_comments = st.text_area(
+            "Review / comments",
+            value=row.get("comments", "") or "",
+        )
+
+        save_clicked = st.form_submit_button("Save changes", type="primary")
+        cancel_clicked = st.form_submit_button("Cancel")
+
+        # SAVE branch
+        if save_clicked:
+            try:
+                # 1) Find the row index in the Entries sheet
+                try:
+                    row_idx = find_row_index(entries_ws, entry_id)
+                except RowLookupError as e:
+                    st.error(f"Could not verify entry location: {e}")
+                    row_idx = None
+
+                if row_idx is None:
+                    st.error("Could not find entry in sheet.")
+                else:
+                    # 2) Build updated row dict starting from the original row
+                    updated = {c: row.get(c, "") for c in COLUMNS}
+
+                    updated["title"] = new_title.strip()
+                    updated["platform"] = (new_platform or "").strip()
+                    updated["status"] = (new_status or "").strip().lower()
+                    updated["comments"] = new_comments.strip()
+
+                    # Rating / recommend / watched_year logic
+                    if updated["status"] == "plan":
+                        # For 'Plan' we clear rating, recommend, watched_year
+                        updated["rating"] = ""
+                        updated["recommend"] = ""
+                        updated["watched_year"] = ""
+                    else:
+                        updated["rating"] = new_rating
+                        # Keep existing watched_year if any; you can add a field to edit it later
+                        updated["watched_year"] = row.get("watched_year", "")
+
+                    # 3) Write back to Google Sheets
+                    update_row(entries_ws, row_idx, updated)
+                    read_entries.clear()
+                    st.session_state.pop(edit_key, None)
+                    st.success("Updated!")
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"Update failed: {e}")
+
+        # CANCEL branch
+        if cancel_clicked:
             st.session_state.pop(edit_key, None)
             st.rerun()
 
