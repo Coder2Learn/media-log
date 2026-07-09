@@ -2018,7 +2018,7 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
     for _pair_start in range(0, len(_all_rows), 2):
         _pair_slice = _all_rows[_pair_start:_pair_start + 2]
         _grid_cols = st.columns(len(_pair_slice))
-        for _col_i, (idx, (_, row)) in enumerate(_pair_slice):
+        for _col_i, (idx, row) in enumerate(_pair_slice):
             with _grid_cols[_col_i]:
                 # Basic fields
                 raw_title = str(row.get("title", "") or "").strip()
