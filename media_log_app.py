@@ -147,6 +147,26 @@ MOBILE_CSS = """
         flex: 1 1 100% !important;
     }
 }
+
+/* ---- Card grid: single column on mobile ---- */
+@media (max-width: 640px) {
+    /* Force 2-column st.columns card grid to stack */
+    section[data-testid="stMain"] div[data-testid="stHorizontalBlock"].card-grid-row
+        > div[data-testid="column"] {
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .wlog-card { padding: 10px 10px; }
+    .wlog-card-title { font-size: 0.9rem !important; }
+}
+
+/* ---- Quick-filter chip bar: allow horizontal scroll on narrow screens ---- */
+@media (max-width: 500px) {
+    div[data-testid="stHorizontalBlock"].chip-row {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+    }
+}
 </style>
 """
 
@@ -469,7 +489,7 @@ DETAIL_CSS = """
 </style>
 """
 
-def render_entry_detail(entry_row, vote_summary):
+def render_entry_detail(entry_row, vote_summary, entries_ws=None):
       if "my_collection" not in st.session_state:
           st.session_state["my_collection"] = set()
       if "my_watched_list" not in st.session_state:
@@ -522,7 +542,7 @@ def render_entry_detail(entry_row, vote_summary):
       season_chip = f'<span class="detail-chip">{html.escape(str(season_count))} Seasons</span>' if media_type == MEDIA_TYPE_SERIES and season_count else ""
       episode_chip = f'<span class="detail-chip">{html.escape(str(episode_count))} Episodes</span>' if media_type == MEDIA_TYPE_SERIES and episode_count else ""
       meta_html = f'<div class="detail-meta">{platform_chip_html}{tmdb_rating_chip}{runtime_chip}{season_chip}{episode_chip}{status_html}{recommend_html}</div>'
-      poster_markup = f'<img src="{html.escape(poster_url)}" alt="poster" loading="lazy">' if poster_url else '<div style="height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;">No Poster</div>'
+      poster_markup = f'<img src="{html.escape(poster_url)}" alt="Poster for {title_html}" role="img" aria-label="Movie poster for {title_html}" loading="lazy">' if poster_url else '<div style="height:315px;display:flex;align-items:center;justify-content:center;color:#94a3b8;" role="img" aria-label="No poster available">No Poster</div>'
       tag_html = f'<div class="detail-tagline">{html.escape(tagline)}</div>' if tagline else ''
       year_html = f' • {html.escape(release_year)}' if release_year else ''
       hero_bg_style = f'background-image:url("{html.escape(backdrop_url)}");' if backdrop_url else ''
@@ -556,8 +576,6 @@ def render_entry_detail(entry_row, vote_summary):
       _col_label   = "✓ In Collection" if _is_in_collection else "＋ Add to Collection"
       action_html = (
           f'<div class="hero-actions">'
-          f'<button class="hero-action-btn hero-action-primary">{_watch_label}</button>'
-          f'<button class="hero-action-btn hero-action-secondary">{_col_label}</button>'
           f'{_trailer_btn}'
           f'</div>'
       )
@@ -588,7 +606,7 @@ def render_entry_detail(entry_row, vote_summary):
           watched_with = html.escape(str(entry_row.get("watched_with", "") or "").strip())
           added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
           watched_with_html = f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''
-          community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;"></div></div>'
+          community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{comments_text}</div></div>'
           st.markdown(community_panel, unsafe_allow_html=True)
           _my_coll  = st.session_state.get("my_collection", set())
           _my_watch = st.session_state.get("my_watched_list", set())
@@ -606,11 +624,23 @@ def render_entry_detail(entry_row, vote_summary):
       st.markdown("---")
       _col_in = entry_id in st.session_state.get("my_collection", set())
       _w_in   = entry_id in st.session_state.get("my_watched_list", set())
-      if st.button("✓ Watched" if _w_in else "👁 Mark as Watched", key=f"btn_watched_{entry_id}", use_container_width=True):
-              if _w_in:
-                  st.session_state["my_watched_list"].discard(entry_id)
+      _sheet_watched = _entry_status == "watched"
+      _btn_watched_label = "✓ Watched" if (_w_in or _sheet_watched) else "👁 Mark as Watched"
+      if st.button(_btn_watched_label, key=f"btn_watched_{entry_id}", use_container_width=True):
+              if _w_in or _sheet_watched:
+                  st.session_state.setdefault("my_watched_list", set()).discard(entry_id)
               else:
                   st.session_state.setdefault("my_watched_list", set()).add(entry_id)
+                  if entries_ws is not None:
+                      try:
+                          _ridx = find_row_index(entries_ws, entry_id)
+                          if _ridx and _ridx > 1:
+                              _upd = {c: entry_row.get(c, "") for c in COLUMNS}
+                              _upd["status"] = "watched"
+                              update_row(entries_ws, _ridx, _upd)
+                              read_entries.clear()
+                      except Exception:
+                          pass
               st.rerun()
       if st.button("✓ In Collection" if _col_in else "＋ Add to Collection", key=f"btn_collect_{entry_id}", use_container_width=True):
               if _col_in:
@@ -877,6 +907,8 @@ def read_entries(_ws) -> pd.DataFrame:
           df["recommend"] = df["recommend"].str.strip().str.lower()
     if "platform" in df.columns:
           df["platform"] = df["platform"].str.strip().apply(_normalize_platform_name)
+    if "language" in df.columns:
+          df["language"] = df["language"].str.strip()
     return df
 
 
@@ -1074,6 +1106,14 @@ def render_sidebar():
     if current_name:
         st.sidebar.markdown(f"👤 **{html.escape(current_name)}**")
 
+    # Page descriptions for accessibility / new-user orientation
+    _page_hints = {
+        "Browse":    "Browse, search and filter all logged entries.",
+        "Add Entry": "Log a new movie or web series.",
+        "Reports":   "View stats, charts and activity summaries.",
+    }
+    st.sidebar.caption(_page_hints.get(page, ""))
+
     return page, current_name
 
 
@@ -1081,12 +1121,39 @@ def render_sidebar():
 #  PAGE: ADD ENTRY (FIX #1: UUID-based ID, Enhancement #2: duplicate detection)
 # ─────────────────────────────────────────────
 def page_add_entry(entries_ws, current_name: str):
-    st.subheader("Add a new entry")
-    st.caption("Fill in what you've watched — takes about 10 seconds.")
+    # ── Step indicator ──────────────────────────────────────────────
+    _add_step = st.session_state.get("_add_step", 1)
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:0;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 16px;border-radius:999px;
+           background:{'#7c3aed' if _add_step == 1 else 'rgba(124,58,237,0.18)'};
+           color:{'#fff' if _add_step == 1 else '#a78bfa'};font-weight:700;font-size:0.88rem;">
+        ① Search &amp; Select
+      </div>
+      <div style="flex:1;height:2px;background:rgba(148,163,184,0.2);max-width:40px;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 16px;border-radius:999px;
+           background:{'#7c3aed' if _add_step == 2 else 'rgba(124,58,237,0.18)'};
+           color:{'#fff' if _add_step == 2 else '#a78bfa'};font-weight:700;font-size:0.88rem;">
+        ② Your Details
+      </div>
+      <div style="flex:1;height:2px;background:rgba(148,163,184,0.2);max-width:40px;"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 16px;border-radius:999px;
+           background:rgba(124,58,237,0.18);color:#a78bfa;font-weight:700;font-size:0.88rem;">
+        ③ Done
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
     reset_n = st.session_state.get("_add_form_reset", 0)
 
-    # ── TMDB autofill ──────────────────────────────────────────────
-    with st.expander("🔍 Auto-fill from TMDB (optional)", expanded=False):
+    # ── Step 1: TMDB search or skip to manual ──────────────────────
+    _tmdb_expanded = _add_step == 1
+    _skip_col, _spacer = st.columns([2, 8])
+    with _skip_col:
+        if st.button("Skip → Fill manually", key="skip_tmdb_btn", use_container_width=True):
+            st.session_state["_add_step"] = 2
+            st.rerun()
+
+    with st.expander("🔍 Step 1 — Auto-fill from TMDB", expanded=_tmdb_expanded):
         af1, af2, af3 = st.columns([4, 1, 1])
         with af1:
             tmdb_q = st.text_input(
@@ -1154,6 +1221,7 @@ def page_add_entry(entries_ws, current_name: str):
                     st.session_state["pf_platform"] = _platform_from_tmdb_networks(details.get("networks", []))
                     st.session_state["pf_language"] = _language_from_tmdb_code(details.get("language", ""))
                     st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
+                    st.session_state["_add_step"] = 2
                     st.session_state.pop("tmdb_results", None)
                     st.rerun()
 
@@ -1319,24 +1387,14 @@ def page_add_entry(entries_ws, current_name: str):
                     read_entries.clear()
                     st.session_state["_entries_dirty"] = True
                     # Clear TMDB prefill state
-                    for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"):
+                    for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language", "pf_tmdb_id"):
                         st.session_state.pop(k, None)
                     st.session_state.pop(dup_key, None)
-                    st.session_state["add_form_reset"] = st.session_state.get("add_form_reset", 0) + 1
-                    # Show a popup dialog confirming the save
-                    @st.dialog("Entry added")
-                    def entry_added_dialog():
-                        st.write(f"**{title.strip()}** has been saved to your MediaLog.")
-                        d1, d2 = st.columns(2)
-                        with d1:
-                            if st.button("Add another", type="primary", use_container_width=True):
-                                st.rerun()
-                        with d2:
-                            if st.button("Go to Browse", use_container_width=True):
-                                st.session_state["_force_nav"] = "Browse"
-                                st.rerun()
-                    entry_added_dialog()
-                    st.stop()  # stop the rest of the page until user dismisses the dialog
+                    st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
+                    st.session_state["_add_step"] = 1
+                    st.toast(f"✓ {title.strip()} added to your MediaLog!", icon="🎬")
+                    st.session_state["_force_nav"] = "Browse"
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error saving entry: {e}")
 
@@ -1473,14 +1531,6 @@ def page_browse(entries_ws, votes_ws):
     </style>
     """, unsafe_allow_html=True)
 
-    search_text = st.text_input(
-        "🔍 Search titles",
-        value=st.session_state.get("browse_search", ""),
-        placeholder="Search by title…",
-        key="browse_search",
-        label_visibility="collapsed",
-    )
-
     # BUG-08: if we just navigated here after a save, bust the cache so the
     # new entry is immediately visible (read_entries.clear() after append is
     # correct but the dialog rerun can race against the 30s TTL)
@@ -1512,13 +1562,27 @@ def page_browse(entries_ws, votes_ws):
                 else:
                     selected_df = df[title_mask]
         if not selected_df.empty:
-            render_entry_detail(selected_df.iloc[0], vote_summary)
+            render_entry_detail(selected_df.iloc[0], vote_summary, entries_ws)
             return
         _clear_detail_view_state()
 
     if df.empty:
-        st.info("No entries yet. Go to **Add Entry** to log your first movie or series.")
+        st.markdown("""
+        <div style="text-align:center;padding:60px 20px;">
+            <div style="font-size:4rem;margin-bottom:16px;">🎬</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Nothing logged yet</div>
+            <div style="color:#94a3b8;font-size:1rem;">Add your first movie or series to get started.</div>
+        </div>
+        """, unsafe_allow_html=True)
         return
+
+    search_text = st.text_input(
+        "🔍 Search titles",
+        placeholder="Search by title…",
+        key="browse_search",
+        label_visibility="collapsed",
+        autocomplete="off",
+    )
 
     st.divider()
 
@@ -1569,18 +1633,43 @@ def page_browse(entries_ws, votes_ws):
                         st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
                         st.rerun()
             st.divider()
-    with st.expander("🔎 Filters & Sort", expanded=False):
-        fc0a, fc0b = st.columns(2)
-        with fc0a:
-            preset = st.selectbox(
-                "Quick filter",
-                ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"],
-                key="browse_preset",
-            )
-        with fc0b:
-            show_mine = st.checkbox("Show only my entries", value=False, key="show_mine_check")
+    # ── Quick-filter chip bar (always visible) ─────────────────────
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"].chip-row > div[data-testid="column"] {
+        padding: 0 4px 0 0 !important;
+        min-width: unset !important;
+        flex: 0 0 auto !important;
+    }
+    div[data-testid="stHorizontalBlock"].chip-row button {
+        border-radius: 999px !important;
+        font-size: 0.82rem !important;
+        padding: 4px 14px !important;
+        white-space: nowrap !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-        my_name = st.session_state.get("username", "").strip()
+    _preset_chips = ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"]
+    _current_preset = st.session_state.get("browse_preset", "All")
+
+    chip_c = st.columns(len(_preset_chips) + 2)
+    for _ci, _chip in enumerate(_preset_chips):
+        with chip_c[_ci]:
+            _active = _current_preset == _chip
+            _label = ("✓ " if _active else "") + _chip
+            if st.button(_label, key=f"chip_{_ci}", use_container_width=False,
+                         type="primary" if _active else "secondary"):
+                st.session_state["browse_preset"] = _chip
+                st.rerun()
+    with chip_c[len(_preset_chips)]:
+        show_mine = st.checkbox("Mine only", value=False, key="show_mine_check")
+
+    preset = st.session_state.get("browse_preset", "All")
+    my_name = st.session_state.get("username", "").strip()
+
+    # ── Advanced filters in collapsible expander ──────────────────
+    with st.expander("⚙ More filters & sort", expanded=False):
         sort_choice = st.selectbox("Sort by", list(SORT_OPTIONS.keys()), index=0, key="sort_select")
 
         fc1, fc2, fc3, fc4, fc5, fc6 = st.columns(6)
@@ -1596,8 +1685,6 @@ def page_browse(entries_ws, votes_ws):
             genre_f = st.multiselect("Genre", GENRES_LIST, key="f_genre")
         with fc6:
             lang_f = st.multiselect("Language", LANGUAGES, key="f_lang")
-
-
 
         active_count = sum([
             bool(plat_f),
@@ -1671,25 +1758,13 @@ def page_browse(entries_ws, votes_ws):
         )
 
     elif sort_col == "title" and "title" in filtered.columns:
-    # Safe title sort: normalize everything to strings before sorting
-        tmp = (
-            filtered["title"]
-            .fillna("")      # None → empty string
-            .astype(str)     # numbers, etc. → string
-            .str.strip()
-            .str.lower()
-        )
-        filtered["_title_sort_key"] = tmp
-        filtered = (
-            filtered.sort_values("_title_sort_key", ascending=sort_asc, na_position="last")
-            .drop(columns=["_title_sort_key"])
-        )
+        filtered = _safe_sort(filtered, "title", sort_asc)
 
     elif sort_col in filtered.columns:
         filtered = filtered.sort_values(sort_col, ascending=sort_asc, na_position="last")
 
       # FIX #4: Detect filter changes and reset pagination
-    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f} |{lang_f}|{sort_choice}"
+    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{lang_f}|{sort_choice}"
     if st.session_state.get("_last_filter_sig") != current_filter_sig:
         st.session_state["_last_filter_sig"] = current_filter_sig
         for k in list(st.session_state.keys()):
@@ -1784,12 +1859,15 @@ def page_reports(entries_ws):
       _r_avg     = df["rating"].mean() if "rating" in df.columns else float("nan")
       _r_watched = df[df["status"].str.lower() == "watched"] if "status" in df.columns else df
       _r_rec_pct = int(100 * (_r_watched["recommend"].str.lower() == "yes").sum() / max(len(_r_watched), 1)) if "recommend" in df.columns else 0
+      _r_watched_df = df[df["status"].str.lower() == "watched"] if "status" in df.columns else df.iloc[0:0]
+      _r_hrs = int(len(_r_watched_df) * 1.8)  # rough estimate: 1.8h avg per title
       render_stats_grid([
           ("Total titles", _r_total),
           ("Movies", _r_movies),
           ("Web series", _r_series),
           ("Avg rating", f"{_r_avg:.1f}" if pd.notna(_r_avg) else "–"),
           ("Recommend %", f"{_r_rec_pct}%"),
+          ("Est. hours watched", f"~{_r_hrs}h"),
       ])
       st.divider()
 
@@ -1924,88 +2002,118 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
     _inject_card_css()
 
     if filtered.empty:
-        st.info("No entries match the current filters.")
+        st.markdown("""
+        <div style="text-align:center;padding:48px 20px;">
+            <div style="font-size:3rem;margin-bottom:12px;">🔍</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#f1f5f9;margin-bottom:6px;">No results found</div>
+            <div style="color:#94a3b8;font-size:0.95rem;">Try adjusting your search or clearing some filters.</div>
+        </div>
+        """, unsafe_allow_html=True)
         return
 
     voter_name = st.session_state.get("voter_name", "").strip()
     current_user = st.session_state.get("username", "").strip()
 
-    for idx, (_, row) in enumerate(filtered.iterrows()):
-        # Basic fields
-        raw_title = str(row.get("title", "") or "").strip()
-        media_type = normalize_media_type(row.get("type", "Movie"))
-        platform = str(row.get("platform", "") or "").strip()
-        genre = str(row.get("genre", "") or "").strip()
-        raw_status = row.get("status", "")
-        status_key = str(raw_status).strip().lower() if pd.notna(raw_status) else ""
-        raw_rating = row.get("rating", "")
+    _all_rows = list(filtered.iterrows())
+    for _pair_start in range(0, len(_all_rows), 2):
+        _pair_slice = _all_rows[_pair_start:_pair_start + 2]
+        _grid_cols = st.columns(len(_pair_slice))
+        for _col_i, (idx, (_, row)) in enumerate(_pair_slice):
+            with _grid_cols[_col_i]:
+                # Basic fields
+                raw_title = str(row.get("title", "") or "").strip()
+                media_type = normalize_media_type(row.get("type", "Movie"))
+                platform = str(row.get("platform", "") or "").strip()
+                genre = str(row.get("genre", "") or "").strip()
+                raw_status = row.get("status", "")
+                status_key = str(raw_status).strip().lower() if pd.notna(raw_status) else ""
+                raw_rating = row.get("rating", "")
 
-        # Resolve entry_id and handle corrupted IDs early
-        entry_id = _resolve_entry_id(row)
-        if entry_id is None:
-            st.markdown(
-                f'<div class="wlog-card"><span style="color:#f87171;font-size:.85rem;">'
-                f'⚠ "{html.escape(raw_title)}" has a corrupted entry_id — '
-                f'skipped. Ask an admin to repair this row.</span></div>',
-                unsafe_allow_html=True,
-            )
-            continue  # skip vote/edit/delete widgets for this row entirely
+                # Resolve entry_id and handle corrupted IDs early
+                entry_id = _resolve_entry_id(row)
+                if entry_id is None:
+                    st.markdown(
+                        f'<div class="wlog-card"><span style="color:#f87171;font-size:.85rem;">'
+                        f'⚠ "{html.escape(raw_title)}" has a corrupted entry_id — '
+                        f'skipped. Ask an admin to repair this row.</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                    continue  # skip vote/edit/delete widgets for this row entirely
 
-        # Display text (card body)
-        title_txt     = row.get("title", "—") or "—"
-        # Use normalized media type for nicer label
-        type_txt      = "Movie" if media_type == MEDIA_TYPE_MOVIE else "Web Series"
-        genre_txt     = row.get("genre", "") or "—"
-        added_by_txt  = row.get("added_by", "") or "Unknown"
-        comments_txt  = row.get("comments", "") or ""
-        poster_url    = row.get("poster_url", "") or ""
-        watched_with  = row.get("watched_with", "") or ""
+                # Display text (card body)
+                title_txt     = row.get("title", "—") or "—"
+                title_raw     = str(title_txt)
+                # Use normalized media type for nicer label
+                type_txt      = "Movie" if media_type == MEDIA_TYPE_MOVIE else "Web Series"
+                genre_txt     = row.get("genre", "") or "—"
+                added_by_txt  = row.get("added_by", "") or "Unknown"
+                comments_txt  = row.get("comments", "") or ""
+                poster_url    = row.get("poster_url", "") or ""
+                watched_with  = row.get("watched_with", "") or ""
 
-        platform_html  = platform_badge(row.get("platform", ""))
-        rating_html    = rating_stars(row.get("rating"))
-        status_html    = status_badge(row.get("status", ""))
-        recommend_html = recommend_badge(row.get("recommend", ""))
+                platform_html  = platform_badge(row.get("platform", ""))
+                rating_html    = rating_stars(row.get("rating"))
+                status_html    = status_badge(row.get("status", ""))
+                recommend_html = recommend_badge(row.get("recommend", ""))
 
-        # XSS protection
-        title_txt     = html.escape(str(title_txt))
-        type_txt      = html.escape(str(type_txt))
-        genre_txt     = html.escape(str(genre_txt))
-        added_by_txt  = html.escape(str(added_by_txt))
-        comments_txt  = html.escape(str(comments_txt))
-        watched_with  = html.escape(str(watched_with))
+                # XSS protection
+                title_txt     = html.escape(str(title_txt))
+                type_txt      = html.escape(str(type_txt))
+                genre_txt     = html.escape(str(genre_txt))
+                added_by_txt  = html.escape(str(added_by_txt))
+                comments_txt  = html.escape(str(comments_txt))
+                watched_with  = html.escape(str(watched_with))
 
-        # Vote summary
-        counts    = vote_summary.get(entry_id, {"yes": 0, "no": 0})
-        comm_bar  = community_bar(counts["yes"], counts["no"])
+                # Vote summary
+                counts    = vote_summary.get(entry_id, {"yes": 0, "no": 0})
+                comm_bar  = community_bar(counts["yes"], counts["no"])
 
-        # ENHANCEMENT #6: spoiler toggle for reviews
-        review_html = ""
-        if comments_txt:
-            review_html = (
-                f'<details style="margin-top:4px;">'
-                f'<summary style="font-size:0.78rem;color:#94a3b8;cursor:pointer;">💬 Show review</summary>'
-                f'<div class="wlog-card-review">{comments_txt}</div>'
-                f'</details>'
-            )
+                # ENHANCEMENT #6: spoiler toggle for reviews
+                review_html = ""
+                if comments_txt:
+                    review_html = (
+                        f'<details style="margin-top:4px;">'
+                        f'<summary style="font-size:0.78rem;color:#94a3b8;cursor:pointer;">💬 Show review</summary>'
+                        f'<div class="wlog-card-review">{comments_txt}</div>'
+                        f'</details>'
+                    )
 
-        # ENHANCEMENT #10: show "watched with" info
-        watched_with_html = ""
-        if watched_with:
-            watched_with_html = (
-                f'<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px;">👥 {watched_with}</span>'
-            )
+                # ENHANCEMENT #10: show "watched with" info
+                watched_with_html = ""
+                if watched_with:
+                    watched_with_html = (
+                        f'<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px;">👥 {watched_with}</span>'
+                    )
 
-        # Build the inner card layout
-        if poster_url:
-            img_html = (
-                f'<img src="{html.escape(poster_url)}" width="54" height="80" '
-                f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
-                f'alt="poster" loading="lazy">'
-            )
-            card_inner = f"""
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-                {img_html}
-                <div style="flex:1;min-width:0;">
+                # Build the inner card layout
+                if poster_url:
+                    img_html = (
+                        f'<img src="{html.escape(poster_url)}" width="54" height="80" '
+                        f'style="border-radius:5px;object-fit:cover;flex-shrink:0;" '
+                        f'alt="poster" loading="lazy">'
+                    )
+                    card_inner = f"""
+                    <div style="display:flex;gap:12px;align-items:flex-start;">
+                        {img_html}
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                                <div>
+                                    <span class="wlog-card-title">{title_txt}</span>
+                                    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
+                            </div>
+                            <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+                                {rating_html} {recommend_html} {status_html}
+                            </div>
+                            {review_html}
+                            <div style="margin-top:6px;">{comm_bar}</div>
+                            <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
+                        </div>
+                    </div>
+                    """
+                else:
+                    card_inner = f"""
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                         <div>
                             <span class="wlog-card-title">{title_txt}</span>
@@ -2019,61 +2127,43 @@ def _render_cards(filtered, vote_summary, votes_df, votes_ws, entries_ws, render
                     {review_html}
                     <div style="margin-top:6px;">{comm_bar}</div>
                     <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
-                </div>
-            </div>
-            """
-        else:
-            card_inner = f"""
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                    <span class="wlog-card-title">{title_txt}</span>
-                    <span class="wlog-card-meta">{type_txt} · {genre_txt}</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:5px;">{platform_html}</div>
-            </div>
-            <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-                {rating_html} {recommend_html} {status_html}
-            </div>
-            {review_html}
-            <div style="margin-top:6px;">{comm_bar}</div>
-            <div class="wlog-card-footer">Added by {added_by_txt}{watched_with_html}</div>
-            """
+                    """
 
-        # Wrap inner layout and normalize whitespace → card_html
-        raw_card_html = f'<div class="wlog-card">{card_inner}</div>'
-        card_html = re.sub(r"\s+", " ", raw_card_html).strip()
+                # Wrap inner layout and normalize whitespace → card_html
+                raw_card_html = f'<div class="wlog-card">{card_inner}</div>'
+                card_html = re.sub(r"\s+", " ", raw_card_html).strip()
 
-        # Render card + actions
-        with st.container():
-            st.markdown(card_html, unsafe_allow_html=True)
+                # Render card + actions
+                with st.container():
+                    st.markdown(card_html, unsafe_allow_html=True)
 
-            col_a, col_b = st.columns([1, 1])
-            with col_a:
-                if st.button("🔍 View Details", key=f"view_details_{render_scope}_{entry_id}_{idx}", use_container_width=True,):
-                    st.session_state["selected_entry_id"] = entry_id
-                    st.session_state["selected_entry_title"] = title_txt
-                    st.session_state["selected_entry_type"] = media_type
-                    st.rerun()
+                    col_a, col_b = st.columns([1, 1])
+                    with col_a:
+                        if st.button("🔍 View Details", key=f"view_details_{render_scope}_{entry_id}_{idx}", use_container_width=True,):
+                            st.session_state["selected_entry_id"] = entry_id
+                            st.session_state["selected_entry_title"] = title_raw
+                            st.session_state["selected_entry_type"] = media_type
+                            st.rerun()
 
-            with col_b:
-                # Vote + Edit/Delete row
-                with st.expander("Vote / Manage", expanded=False):
-                    _render_vote_widget(
-                        entry_id,
-                        title_txt,
-                        voter_name,
-                        votes_df,
-                        votes_ws,
-                        counts["yes"],
-                        counts["no"],
-                        idx,
-                        render_scope,
-                    )
-                    if (
-                        current_user
-                        and current_user.lower()
-                        == (row.get("added_by", "") or "").strip().lower()
-                    ): _render_edit_delete(entry_id, row, entries_ws, votes_ws, idx, render_scope)
+                    with col_b:
+                        # Vote + Edit/Delete row
+                        with st.expander("Vote / Manage", expanded=False):
+                            _render_vote_widget(
+                                entry_id,
+                                title_txt,
+                                voter_name,
+                                votes_df,
+                                votes_ws,
+                                counts["yes"],
+                                counts["no"],
+                                idx,
+                                render_scope,
+                            )
+                            if (
+                                current_user
+                                and current_user.lower()
+                                == (row.get("added_by", "") or "").strip().lower()
+                            ): _render_edit_delete(entry_id, row, entries_ws, votes_ws, idx, render_scope)
 
         st.markdown('<hr class="wlog-divider">', unsafe_allow_html=True)
 
@@ -2120,19 +2210,18 @@ def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_sc
     with st.form(f"edit_form_{entry_id}_{scope}", clear_on_submit=False):
         st.markdown(f"**Editing:** {html.escape(str(row.get('title', '')))}")
 
-        # Basic fields
+        # Row 1: Title
         new_title = st.text_input("Title", value=row.get("title", "") or "")
 
+        # Row 2: Platform / Status / Rating
         col1, col2, col3 = st.columns(3)
         with col1:
-            # Use your existing helper to preserve off-list values
             new_platform = _selectbox_preserve(
                 "Platform",
                 PLATFORMS,
                 row.get("platform", ""),
                 key=f"edit_platform_{entry_id}_{scope}",
             )
-
         with col2:
             current_status = str(row.get("status", "") or "").strip().lower()
             new_status = _selectbox_preserve(
@@ -2141,15 +2230,63 @@ def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_sc
                 current_status,
                 key=f"edit_status_{entry_id}_{scope}",
             )
-
         with col3:
             raw_rating = row.get("rating", "")
             try:
-                base_rating = int(float(raw_rating)) if str(raw_rating).strip() else 8
-            except ValueError:
+                _raw_str = str(raw_rating).strip()
+                base_rating = int(float(_raw_str)) if _raw_str not in ("", "nan", "None", "<NA>") else 8
+                base_rating = max(1, min(10, base_rating))
+            except (ValueError, TypeError):
                 base_rating = 8
             new_rating = st.slider("Rating", 1, 10, base_rating)
 
+        # Row 3: Genre / Language
+        col4, col5 = st.columns(2)
+        with col4:
+            current_genres = [g.strip() for g in str(row.get("genre", "") or "").split(",") if g.strip()]
+            valid_genres = [g for g in current_genres if g in GENRES_LIST]
+            new_genre = st.multiselect("Genre", GENRES_LIST, default=valid_genres,
+                                       key=f"edit_genre_{entry_id}_{scope}")
+        with col5:
+            current_lang = str(row.get("language", "") or "").strip()
+            new_language = _selectbox_preserve(
+                "Language", LANGUAGES, current_lang,
+                key=f"edit_language_{entry_id}_{scope}",
+            )
+
+        # Row 4: Recommend / Watched Year / Watched With (only for non-plan)
+        current_rec = str(row.get("recommend", "") or "").strip().lower()
+        rec_options = ["", "yes", "no"]
+        rec_idx = rec_options.index(current_rec) if current_rec in rec_options else 0
+
+        col6, col7, col8 = st.columns(3)
+        with col6:
+            new_recommend = st.selectbox(
+                "Recommend?", rec_options,
+                index=rec_idx,
+                format_func=lambda x: "—" if x == "" else x.capitalize(),
+                key=f"edit_rec_{entry_id}_{scope}",
+            )
+        with col7:
+            min_year, max_year = 1900, datetime.now().year + 1
+            try:
+                wy_default = int(float(str(row.get("watched_year", "") or ""))) if str(row.get("watched_year", "") or "").strip() else datetime.now().year
+                wy_default = max(min_year, min(wy_default, max_year))
+            except (ValueError, TypeError):
+                wy_default = datetime.now().year
+            new_watched_year = st.number_input(
+                "Year watched", min_value=min_year, max_value=max_year,
+                value=wy_default, step=1,
+                key=f"edit_wy_{entry_id}_{scope}",
+            )
+        with col8:
+            new_watched_with = st.text_input(
+                "Watched with",
+                value=str(row.get("watched_with", "") or ""),
+                key=f"edit_ww_{entry_id}_{scope}",
+            )
+
+        # Comments
         new_comments = st.text_area(
             "Review / comments",
             value=row.get("comments", "") or "",
@@ -2158,52 +2295,54 @@ def _render_edit_delete(entry_id, row, entries_ws, votes_ws, card_idx, render_sc
         save_clicked = st.form_submit_button("Save changes", type="primary")
         cancel_clicked = st.form_submit_button("Cancel")
 
-        # SAVE branch
-        if save_clicked:
+    # SAVE branch — outside the form so st.rerun() works correctly
+    if save_clicked:
+        if not new_title.strip():
+            st.error("Title cannot be empty.")
+        else:
+            row_idx = None
             try:
-                # 1) Find the row index in the Entries sheet
-                try:
-                    row_idx = find_row_index(entries_ws, entry_id)
-                except RowLookupError as e:
-                    st.error(f"Could not verify entry location: {e}")
-                    row_idx = None
+                row_idx = find_row_index(entries_ws, entry_id)
+            except RowLookupError as e:
+                st.error(f"Could not find or verify the entry: {e}")
 
-                if row_idx is None:
-                    st.error("Could not find entry in sheet.")
+            if row_idx is not None:
+                if row_idx <= 1:
+                    st.error("Cannot overwrite the header row — entry ID may be corrupted.")
+                elif _row_snapshot_changed(entries_ws, row_idx, row):
+                    st.warning("This entry was modified by someone else while you had it open. Close the form and try again.")
                 else:
-                    # 2) Build updated row dict starting from the original row
-                    updated = {c: row.get(c, "") for c in COLUMNS}
+                    try:
+                        updated = {c: row.get(c, "") for c in COLUMNS}
+                        updated["title"] = new_title.strip()
+                        updated["platform"] = (new_platform or "").strip()
+                        updated["status"] = (new_status or "").strip().lower()
+                        updated["comments"] = new_comments.strip()
+                        updated["genre"] = ", ".join(new_genre) if new_genre else ""
+                        updated["language"] = new_language or ""
+                        updated["watched_with"] = new_watched_with.strip()
 
-                    updated["title"] = new_title.strip()
-                    updated["platform"] = (new_platform or "").strip()
-                    updated["status"] = (new_status or "").strip().lower()
-                    updated["comments"] = new_comments.strip()
+                        if updated["status"] == "plan":
+                            updated["rating"] = ""
+                            updated["recommend"] = ""
+                            updated["watched_year"] = ""
+                        else:
+                            updated["rating"] = new_rating
+                            updated["recommend"] = new_recommend
+                            updated["watched_year"] = new_watched_year
 
-                    # Rating / recommend / watched_year logic
-                    if updated["status"] == "plan":
-                        # For 'Plan' we clear rating, recommend, watched_year
-                        updated["rating"] = ""
-                        updated["recommend"] = ""
-                        updated["watched_year"] = ""
-                    else:
-                        updated["rating"] = new_rating
-                        # Keep existing watched_year if any; you can add a field to edit it later
-                        updated["watched_year"] = row.get("watched_year", "")
+                        update_row(entries_ws, row_idx, updated)
+                        read_entries.clear()
+                        st.session_state.pop(edit_key, None)
+                        st.success("Updated!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Update failed: {e}")
 
-                    # 3) Write back to Google Sheets
-                    update_row(entries_ws, row_idx, updated)
-                    read_entries.clear()
-                    st.session_state.pop(edit_key, None)
-                    st.success("Updated!")
-                    st.rerun()
-
-            except Exception as e:
-                st.error(f"Update failed: {e}")
-
-        # CANCEL branch
-        if cancel_clicked:
-            st.session_state.pop(edit_key, None)
-            st.rerun()
+    # CANCEL branch
+    if cancel_clicked:
+        st.session_state.pop(edit_key, None)
+        st.rerun()
 
 
   # ─────────────────────────────────────────────
