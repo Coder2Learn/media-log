@@ -177,7 +177,7 @@ SPREADSHEET_TITLE    = "MediaLog"
 SERVICE_ACCOUNT_FILE = "media-log-service-account.json"
 TMDB_BASE            = "https://api.themoviedb.org/3"
 TMDB_IMG_BASE        = "https://image.tmdb.org/t/p/w200"
-PAGE_SIZE            = 100
+PAGE_SIZE            = 24
 
 PLATFORM_LOGOS = {
     "Netflix":         "https://cdn.simpleicons.org/netflix",
@@ -566,19 +566,8 @@ def render_entry_detail(entry_row, vote_summary, entries_ws=None):
       _platform_str = html.escape(str(entry_row.get("platform", "") or ""))
       _platform_chip = f'<span class="detail-chip">▶&nbsp;{_platform_str}</span>' if _platform_str else ""
       _trailer_href = tmdb.get("trailer_url", "") or ""
-      _trailer_btn  = (f'<a href="{_trailer_href}" target="_blank" '
-                       f'style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;'
-                       f'border-radius:999px;background:rgba(255,255,255,.10);color:#f1f5f9;'
-                       f'border:1px solid rgba(255,255,255,.18);text-decoration:none;font-size:.92rem;font-weight:600;'
-                       f'margin-top:6px;">▶ Watch Trailer</a>')\
-                       if _trailer_href else ""
       _watch_label = "✓ Watched" if _is_watched else "👁 Mark as Watched"
       _col_label   = "✓ In Collection" if _is_in_collection else "＋ Add to Collection"
-      action_html = (
-          f'<div class="hero-actions">'
-          f'{_trailer_btn}'
-          f'</div>'
-      )
       hero_html = (
           f'<div class="detail-shell"><div class="detail-hero">'
           f'<div class="detail-backdrop" style="{hero_bg_style}"></div>'
@@ -594,39 +583,83 @@ def render_entry_detail(entry_row, vote_summary, entries_ws=None):
           f'{hero_meta_row}'
           f'<div class="detail-overview" style="margin-top:14px;max-width:520px;">{html.escape(overview) if overview else ""}</div>'
           f'</div>'
-          f'<div style="display:flex;flex-direction:column;justify-content:flex-start;padding-top:8px;">{action_html}</div>'
           f'</div>'
           f'</div></div></div>'
       )
       st.markdown(hero_html, unsafe_allow_html=True)
-      left_col, right_col = st.columns([2.2, 1])
-      with left_col:
-          st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-          comments_text = html.escape(str(entry_row.get("comments", "") or "").strip())
-          watched_with = html.escape(str(entry_row.get("watched_with", "") or "").strip())
-          added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
-          watched_with_html = f'<div class="detail-fact-label">Watched with</div><div class="detail-fact-value">{html.escape(watched_with)}</div>' if watched_with else ''
-          community_panel = f'<div class="detail-panel"><h4>Community</h4><div style="margin-bottom:14px;">{community_html}</div><div class="detail-fact-label">Your rating</div><div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div><div class="detail-fact-label">Added by</div><div class="detail-fact-value">{html.escape(added_by)}</div>{watched_with_html}<div class="detail-fact-label">Review</div><div style="color:#dbe4ee;line-height:1.75;font-size:0.95rem;white-space:pre-wrap;">{comments_text}</div></div>'
-          st.markdown(community_panel, unsafe_allow_html=True)
-          _my_coll  = st.session_state.get("my_collection", set())
-          _my_watch = st.session_state.get("my_watched_list", set())
-          if _my_coll or _my_watch:
-              st.markdown("### My Lists")
-          if _my_watch:
-              with st.expander(f"👁 My Watched List ({len(_my_watch)})", expanded=False):
-                  st.write(", ".join(str(x) for x in _my_watch))
-          if _my_coll:
-              with st.expander(f"📚 My Collection ({len(_my_coll)})", expanded=False):
-                  st.write(", ".join(str(x) for x in _my_coll))
-      with right_col:
-          if tmdb.get("trailer_url"):
-              st.link_button("▶ Watch Trailer", tmdb["trailer_url"], use_container_width=True)
-      st.markdown("---")
-      _col_in = entry_id in st.session_state.get("my_collection", set())
-      _w_in   = entry_id in st.session_state.get("my_watched_list", set())
-      _sheet_watched = _entry_status == "watched"
-      _btn_watched_label = "✓ Watched" if (_w_in or _sheet_watched) else "👁 Mark as Watched"
-      if st.button(_btn_watched_label, key=f"btn_watched_{entry_id}", use_container_width=True):
+
+      # ── Below-hero: two-column layout (moctale style) ──────────────
+      # Left (2.4): Overview · Cast · Seasons
+      # Right (1):  Action buttons · Trailer · Community panel
+      body_left, body_right = st.columns([2.4, 1])
+
+      comments_text = html.escape(str(entry_row.get("comments", "") or "").strip())
+      watched_with_raw = str(entry_row.get("watched_with", "") or "").strip()
+      added_by = str(entry_row.get("added_by", "") or "Unknown").strip()
+
+      with body_left:
+          st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+          # Overview
+          if overview:
+              st.markdown("#### Overview")
+              st.markdown(f'<div style="color:#dbe4ee;font-size:1rem;line-height:1.75;margin-bottom:18px;">{html.escape(overview)}</div>', unsafe_allow_html=True)
+
+          # Genre chips
+          if genres:
+              genre_chips = " ".join(
+                  f'<span style="display:inline-block;padding:4px 12px;border-radius:999px;'
+                  f'background:rgba(124,58,237,0.18);border:1px solid rgba(124,58,237,0.35);'
+                  f'color:#c4b5fd;font-size:0.8rem;font-weight:600;margin:3px 4px 3px 0;">'
+                  f'{html.escape(g)}</span>' for g in genres[:8]
+              )
+              st.markdown(f'<div style="margin-bottom:20px;">{genre_chips}</div>', unsafe_allow_html=True)
+
+          # Cast
+          cast = tmdb.get("cast", [])
+          if cast:
+              st.markdown("#### Cast")
+              cast_cards = []
+              for person in cast[:12]:
+                  img = person.get("profile_url", "")
+                  name = html.escape(person.get("name", "") or "Unknown")
+                  role = html.escape(person.get("character", "") or "")
+                  img_html = f'<img class="cast-avatar" src="{html.escape(img)}" alt="{name}" loading="lazy">' if img else '<div class="cast-placeholder">No Image</div>'
+                  cast_cards.append(f'<div class="cast-card">{img_html}<div class="cast-name">{name}</div><div class="cast-role">{role}</div></div>')
+              st.markdown(f'<div class="cast-strip">{"".join(cast_cards)}</div>', unsafe_allow_html=True)
+              st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+
+          # Seasons (series only)
+          seasons = tmdb.get("seasons", [])
+          if media_type == MEDIA_TYPE_SERIES and seasons:
+              st.markdown("#### Seasons")
+              for season in seasons:
+                  season_name = html.escape(str(season.get("name") or f"Season {season.get('season_number','')}").strip())
+                  season_num = season.get("season_number")
+                  ep_count = season.get("episode_count")
+                  air_date = html.escape(str(season.get("air_date") or "—"))
+                  overview_txt = html.escape(str(season.get("overview") or "No season overview available."))
+                  poster = season.get("poster_url", "")
+                  meta_line = []
+                  if season_num is not None:
+                      meta_line.append(f"Season {season_num}")
+                  if ep_count:
+                      meta_line.append(f"{ep_count} episodes")
+                  meta_line.append(air_date)
+                  s_meta_html = " • ".join(meta_line)
+                  poster_html = f'<img class="season-poster" src="{html.escape(poster)}" alt="season poster" loading="lazy">' if poster else '<div class="season-placeholder">No Poster</div>'
+                  st.markdown(f'<div class="season-card">{poster_html}<div><div class="season-title">{season_name}</div><div class="season-meta">{s_meta_html}</div><div class="season-overview">{overview_txt}</div></div></div>', unsafe_allow_html=True)
+
+      # ── Right column: actions + trailer + community ─────────────────
+      with body_right:
+          st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+          # Action buttons
+          _col_in = entry_id in st.session_state.get("my_collection", set())
+          _w_in   = entry_id in st.session_state.get("my_watched_list", set())
+          _sheet_watched = _entry_status == "watched"
+          _btn_watched_label = "✓ Watched" if (_w_in or _sheet_watched) else "👁 Mark as Watched"
+          if st.button(_btn_watched_label, key=f"btn_watched_{entry_id}", use_container_width=True, type="primary"):
               if _w_in or _sheet_watched:
                   st.session_state.setdefault("my_watched_list", set()).discard(entry_id)
               else:
@@ -642,42 +675,51 @@ def render_entry_detail(entry_row, vote_summary, entries_ws=None):
                       except Exception:
                           pass
               st.rerun()
-      if st.button("✓ In Collection" if _col_in else "＋ Add to Collection", key=f"btn_collect_{entry_id}", use_container_width=True):
+
+          _col_btn_label = "✓ In Collection" if _col_in else "＋ Add to Collection"
+          if st.button(_col_btn_label, key=f"btn_collect_{entry_id}", use_container_width=True):
               if _col_in:
                   st.session_state["my_collection"].discard(entry_id)
               else:
                   st.session_state.setdefault("my_collection", set()).add(entry_id)
               st.rerun()
-      cast = tmdb.get("cast", [])
-      if cast:
-          st.markdown("### Cast")
-          cast_cards = []
-          for person in cast[:12]:
-              img = person.get("profile_url", "")
-              name = html.escape(person.get("name", "") or "Unknown")
-              role = html.escape(person.get("character", "") or "")
-              img_html = f'<img class="cast-avatar" src="{html.escape(img)}" alt="{name}" loading="lazy">' if img else '<div class="cast-placeholder">No Image</div>'
-              cast_cards.append(f'<div class="cast-card">{img_html}<div class="cast-name">{name}</div><div class="cast-role">{role}</div></div>')
-          st.markdown(f'<div class="cast-strip">{"".join(cast_cards)}</div>', unsafe_allow_html=True)
-      seasons = tmdb.get("seasons", [])
-      if media_type == MEDIA_TYPE_SERIES and seasons:
-          st.markdown("### Seasons")
-          for season in seasons:
-              season_name = html.escape(str(season.get("name") or f"Season {season.get('season_number','')}").strip())
-              season_num = season.get("season_number")
-              episode_count = season.get("episode_count")
-              air_date = html.escape(str(season.get("air_date") or "—"))
-              overview_txt = html.escape(str(season.get("overview") or "No season overview available."))
-              poster = season.get("poster_url", "")
-              meta_line = []
-              if season_num is not None:
-                  meta_line.append(f"Season {season_num}")
-              if episode_count:
-                  meta_line.append(f"{episode_count} episodes")
-              meta_line.append(air_date)
-              meta_html = " • ".join(meta_line)
-              poster_html = f'<img class="season-poster" src="{html.escape(poster)}" alt="season poster" loading="lazy">' if poster else '<div class="season-placeholder">No Poster</div>'
-              st.markdown(f'<div class="season-card">{poster_html}<div><div class="season-title">{season_name}</div><div class="season-meta">{meta_html}</div><div class="season-overview">{overview_txt}</div></div></div>', unsafe_allow_html=True)
+
+          # Trailer button (single, here only)
+          if _trailer_href:
+              st.link_button("▶ Watch Trailer", _trailer_href, use_container_width=True)
+
+          st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
+          # Community panel
+          watched_with_panel_html = (
+              f'<div class="detail-fact-label">Watched with</div>'
+              f'<div class="detail-fact-value">{html.escape(watched_with_raw)}</div>'
+          ) if watched_with_raw else ""
+          community_panel = (
+              f'<div class="detail-panel">'
+              f'<h4>Community</h4>'
+              f'<div style="margin-bottom:14px;">{community_html}</div>'
+              f'<div class="detail-fact-label">Your rating</div>'
+              f'<div class="detail-fact-value">{html.escape(str(entry_row.get("rating", "—") or "—"))} / 10</div>'
+              f'<div class="detail-fact-label">Added by</div>'
+              f'<div class="detail-fact-value">{html.escape(added_by)}</div>'
+              f'{watched_with_panel_html}'
+              + (f'<div class="detail-fact-label">Review</div>'
+                 f'<div style="color:#dbe4ee;line-height:1.75;font-size:0.88rem;white-space:pre-wrap;margin-top:4px;">{comments_text}</div>'
+                 if comments_text else "")
+              + f'</div>'
+          )
+          st.markdown(community_panel, unsafe_allow_html=True)
+
+          # My lists (compact)
+          _my_coll  = st.session_state.get("my_collection", set())
+          _my_watch = st.session_state.get("my_watched_list", set())
+          if _my_watch:
+              with st.expander(f"👁 My Watched ({len(_my_watch)})", expanded=False):
+                  st.write(", ".join(str(x) for x in _my_watch))
+          if _my_coll:
+              with st.expander(f"📚 My Collection ({len(_my_coll)})", expanded=False):
+                  st.write(", ".join(str(x) for x in _my_coll))
 
 
 def platform_badge(platform: str) -> str:
@@ -882,7 +924,7 @@ def empty_votes_df():
       return pd.DataFrame(columns=VOTE_COLUMNS)
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def read_entries(_ws) -> pd.DataFrame:
     try:
         data = _ws.get_all_records()
@@ -912,7 +954,7 @@ def read_entries(_ws) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def read_votes(_ws) -> pd.DataFrame:
     try:
         data = _ws.get_all_records()
