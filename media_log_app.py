@@ -607,7 +607,10 @@ def render_entry_detail(entry_row, vote_summary):
       _col_in = entry_id in st.session_state.get("my_collection", set())
       _w_in   = entry_id in st.session_state.get("my_watched_list", set())
       if st.button("✓ Watched" if _w_in else "👁 Mark as Watched", key=f"btn_watched_{entry_id}", use_container_width=True):
-              st.session_state.setdefault("my_watched_list", set()).add(entry_id)
+              if _w_in:
+                  st.session_state["my_watched_list"].discard(entry_id)
+              else:
+                  st.session_state.setdefault("my_watched_list", set()).add(entry_id)
               st.rerun()
       if st.button("✓ In Collection" if _col_in else "＋ Add to Collection", key=f"btn_collect_{entry_id}", use_container_width=True):
               if _col_in:
@@ -1045,11 +1048,14 @@ def render_sidebar():
             st.session_state.pop(k, None)
         st.rerun()
 
-    # Navigation radio
+    # Navigation radio — honour forced navigation from dialogs
+    _nav_pages = ["Browse", "Add Entry", "Reports"]
+    _forced = st.session_state.pop("_force_nav", None)
+    _default_idx = _nav_pages.index(_forced) if _forced in _nav_pages else 0
     page = st.sidebar.radio(
         "Navigate",
-        ["Browse", "Add Entry", "Reports"],
-        index=0,
+        _nav_pages,
+        index=_default_idx,
     )
 
     # Remember last page to clear detail view when changing pages
@@ -1308,6 +1314,7 @@ def page_add_entry(entries_ws, current_name: str):
                 try:
                     append_row(entries_ws, row)
                     read_entries.clear()
+                    st.session_state["_entries_dirty"] = True
                     # Clear TMDB prefill state
                     for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language"):
                         st.session_state.pop(k, None)
@@ -1323,8 +1330,7 @@ def page_add_entry(entries_ws, current_name: str):
                                 st.rerun()
                         with d2:
                             if st.button("Go to Browse", use_container_width=True):
-                            # Switch to Browse page on next rerun
-                                st.session_state["prev_page"] = "Browse"
+                                st.session_state["_force_nav"] = "Browse"
                                 st.rerun()
                     entry_added_dialog()
                     st.stop()  # stop the rest of the page until user dismisses the dialog
@@ -1464,7 +1470,19 @@ def page_browse(entries_ws, votes_ws):
     </style>
     """, unsafe_allow_html=True)
 
-    search_text = st.session_state.get("browse_search", "")
+    search_text = st.text_input(
+        "🔍 Search titles",
+        value=st.session_state.get("browse_search", ""),
+        placeholder="Search by title…",
+        key="browse_search",
+        label_visibility="collapsed",
+    )
+
+    # BUG-08: if we just navigated here after a save, bust the cache so the
+    # new entry is immediately visible (read_entries.clear() after append is
+    # correct but the dialog rerun can race against the 30s TTL)
+    if st.session_state.pop("_entries_dirty", False):
+        read_entries.clear()
 
     with st.spinner(""):
         ph = st.empty()
@@ -1553,7 +1571,7 @@ def page_browse(entries_ws, votes_ws):
         with fc0a:
             preset = st.selectbox(
                 "Quick filter",
-                ["All", "Recommended only", "High ratings (8+)", "Plan to Watch"],
+                ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"],
                 key="browse_preset",
             )
         with fc0b:
