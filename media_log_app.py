@@ -1048,14 +1048,17 @@ def render_sidebar():
             st.session_state.pop(k, None)
         st.rerun()
 
-    # Navigation radio — honour forced navigation from dialogs
+    # Navigation radio — honour forced navigation from dialogs.
+    # We must write directly into the widget's session_state key BEFORE
+    # the radio renders; the `index` param is ignored after first render.
     _nav_pages = ["Browse", "Add Entry", "Reports"]
     _forced = st.session_state.pop("_force_nav", None)
-    _default_idx = _nav_pages.index(_forced) if _forced in _nav_pages else 0
+    if _forced in _nav_pages:
+        st.session_state["_nav_radio"] = _forced
     page = st.sidebar.radio(
         "Navigate",
         _nav_pages,
-        index=_default_idx,
+        key="_nav_radio",
     )
 
     # Remember last page to clear detail view when changing pages
