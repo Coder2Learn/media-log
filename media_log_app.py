@@ -15,12 +15,41 @@ GLOBAL_TOKENS_CSS = """<style>
 html, body, [class*="css"] { font-family: 'General Sans', sans-serif; }
 .detail-title, .stat-value { font-family: 'Cabinet Grotesk', sans-serif; }
 /* Force the dark palette even if a user's browser has a saved LIGHT Streamlit
-   theme preference (that preference otherwise overrides config.toml's base). */
+   theme preference (that preference otherwise overrides config.toml's base).
+   NOTE: it's not enough to whiten text — Streamlit's widget backgrounds are
+   light in light mode, so buttons/inputs must get dark surfaces too or their
+   text renders white-on-white (invisible). */
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     background-color: #0b0f17 !important;
     color: #f1f5f9 !important;
 }
 [data-testid="stSidebar"] { background-color: #0e131c !important; }
+
+/* Buttons (default/secondary): dark surface + readable text */
+.stApp [data-testid="stBaseButton-secondary"],
+.stApp button[kind="secondary"] {
+    background-color: #161c27 !important;
+    color: #f1f5f9 !important;
+    border: 1px solid rgba(148,163,184,0.22) !important;
+}
+.stApp [data-testid="stBaseButton-secondary"]:hover,
+.stApp button[kind="secondary"]:hover {
+    border-color: #7c3aed !important;
+    color: #ffffff !important;
+}
+/* Text inputs, text areas, number inputs, select boxes */
+.stApp [data-testid="stTextInput"] input,
+.stApp [data-testid="stTextArea"] textarea,
+.stApp [data-testid="stNumberInput"] input,
+.stApp [data-baseweb="input"], .stApp [data-baseweb="textarea"],
+.stApp [data-baseweb="select"] > div {
+    background-color: #161c27 !important;
+    color: #f1f5f9 !important;
+}
+.stApp [data-testid="stTextInput"] input::placeholder,
+.stApp [data-testid="stTextArea"] textarea::placeholder { color: #6b7789 !important; }
+/* Expander + container surfaces */
+.stApp [data-testid="stExpander"] { background-color: #11161f !important; }
 :root {
   /* Surfaces */
 --bg:            #0b0f17;
@@ -1197,15 +1226,19 @@ LANDING_CSS = """
     font-size: 1.05rem;
     padding: 14px 18px;
     border-radius: 14px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(148,163,184,0.28);
-    color: #f1f5f9;
+    background: #161c27 !important;
+    border: 1px solid rgba(148,163,184,0.28) !important;
+    color: #f1f5f9 !important;
 }
+.stApp [data-testid="stTextInput"] input::placeholder { color: #6b7789 !important; }
 .stApp [data-testid="stTextInput"] input:focus {
     border-color: var(--accent, #7c3aed);
     box-shadow: 0 0 0 3px rgba(124,58,237,0.25);
 }
 .stApp [data-testid="stTextInput"] label { justify-content: center; width: 100%; }
+/* Hide Streamlit's "Press Enter to submit form" hint — it overlaps the
+   centered placeholder on the welcome gate (issues #1/#5). */
+.stApp [data-testid="InputInstructions"] { display: none !important; }
 .stApp [data-testid="stFormSubmitButton"] button {
     width: 100%;
     border-radius: 14px;
@@ -2362,9 +2395,9 @@ CARD_CSS = """<style>
   .wlog-card {
       border: 1px solid rgba(148,163,184,0.15);
       border-radius: 10px;
-      padding: 10px 14px;
-      margin-bottom: 0px;
-      background: var(--background-color, transparent);
+      padding: 12px 14px 14px 14px;
+      margin-bottom: 8px;
+      background: var(--surface, #11161f);
   }
   .wlog-card-title { font-size:1.0rem; font-weight:700; color:inherit; }
   .wlog-card-meta  { font-size:0.76rem; color:#94a3b8; margin-left:6px; }
@@ -2392,6 +2425,9 @@ CARD_CSS = """<style>
 def _inject_card_css():
       # FIX #3: use session_state instead of fragile module-level global
       if not st.session_state.get("clickable_card_css_injected"):
+        # CARD_CSS was defined but never injected — that's why .wlog-card had no
+        # padding and the footer collided with the buttons below it (issue #3).
+        st.markdown(CARD_CSS, unsafe_allow_html=True)
         st.markdown(CLICKABLE_CARD_CSS, unsafe_allow_html=True)
         st.session_state["clickable_card_css_injected"] = True
 
