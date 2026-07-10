@@ -1267,17 +1267,81 @@ def ensure_username() -> bool:
 
 TOP_NAV_CSS = """
 <style>
-/* Top navigation tabs (segmented control) — sit like a tab bar under the title */
-.topnav-wrap { margin: 2px 0 10px 0; }
-.topnav-wrap [data-testid="stSegmentedControl"] button {
-    font-size: 0.98rem !important;
-    font-weight: 700 !important;
-    padding: 8px 22px !important;
+/* ── Reclaim the big empty band at the top of the main area ─────── */
+[data-testid="stMainBlockContainer"] {
+    padding-top: 0.6rem !important;
 }
-/* Inline "type" segmented control in the Browse filter row */
-.typebar [data-testid="stSegmentedControl"] button {
-    padding: 6px 16px !important;
-    font-weight: 600 !important;
+/* Tighten the default 1rem gap between stacked elements so the first row
+   of the movie list is reachable without scrolling past a tall header. */
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] {
+    gap: 0.55rem !important;
+}
+/* Slimmer horizontal rules */
+[data-testid="stMain"] hr,
+[data-testid="stMain"] [data-testid="stDivider"] { margin: 0.35rem 0 !important; }
+/* Compact the collapsed "Tonight's picks" expander header */
+.st-key-tonight_expander summary { font-size: 1.02rem !important; font-weight: 700 !important; }
+
+/* ── Sticky top navigation TABS (Browse / Add Entry / Reports) ───── */
+/* Streamlit 1.58 renders st.segmented_control as stButtonGroup; the keyed
+   wrapper .st-key-_nav_tabs is the stable hook. */
+.st-key-_nav_tabs {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: var(--bg, #0b0f17);
+    padding: 10px 0 0 0;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border, rgba(148,163,184,0.14));
+}
+.st-key-_nav_tabs [data-testid="stButtonGroup"] { gap: 6px; }
+.st-key-_nav_tabs button {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 10px 10px 0 0 !important;
+    color: var(--text-muted, #a3adc2) !important;
+    font-size: 1.06rem !important;
+    font-weight: 700 !important;
+    padding: 13px 30px !important;
+    border-bottom: 3px solid transparent !important;
+    margin-bottom: -1px !important;
+    transition: color .15s, border-color .15s, background .15s;
+}
+.st-key-_nav_tabs button:hover {
+    color: var(--text, #f1f5f9) !important;
+    background: var(--surface-2, #161c27) !important;
+}
+.st-key-_nav_tabs button[data-testid="stBaseButton-segmented_controlActive"] {
+    color: var(--text, #f1f5f9) !important;
+    background: var(--surface-2, #161c27) !important;
+    border-bottom: 3px solid var(--accent, #7c3aed) !important;
+}
+
+/* ── Rich inline TYPE segmented control (All / Movies / Series) ──── */
+.st-key-browse_type_seg [data-testid="stButtonGroup"] {
+    display: inline-flex;
+    gap: 3px;
+    background: var(--surface-2, #161c27);
+    border: 1px solid var(--border, rgba(148,163,184,0.14));
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.24));
+}
+.st-key-browse_type_seg button {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 9px !important;
+    color: var(--text-muted, #a3adc2) !important;
+    font-size: 0.96rem !important;
+    font-weight: 650 !important;
+    padding: 9px 26px !important;
+    transition: background .15s, color .15s;
+}
+.st-key-browse_type_seg button:hover { color: var(--text, #f1f5f9) !important; }
+.st-key-browse_type_seg button[data-testid="stBaseButton-segmented_controlActive"] {
+    background: var(--accent, #7c3aed) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(124,58,237,0.35);
 }
 </style>
 """
@@ -1296,7 +1360,6 @@ def render_top_nav():
     if _forced in _nav_pages:
         st.session_state["_nav_tabs"] = _nav_icons[_forced]
 
-    st.markdown('<div class="topnav-wrap">', unsafe_allow_html=True)
     _label = st.segmented_control(
         "Navigate",
         options=[_nav_icons[p] for p in _nav_pages],
@@ -1304,7 +1367,6 @@ def render_top_nav():
         key="_nav_tabs",
         label_visibility="collapsed",
     )
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Map the icon label back to the plain page name (segmented_control can
     # return None if somehow deselected — fall back to Browse).
@@ -1884,8 +1946,6 @@ def page_browse(entries_ws, votes_ws, sel_year=None, sel_month=None):
         autocomplete="off",
     )
 
-    st.divider()
-
     # ── ENHANCEMENT #4: Activity feed ─────────────────────────────
     if "timestamp" in df.columns:
         recent = df.dropna(subset=["timestamp"]).sort_values("timestamp", ascending=False).head(3)
@@ -1908,34 +1968,34 @@ def page_browse(entries_ws, votes_ws, sel_year=None, sel_month=None):
             top_pool = top_pool[top_pool["added_by"].str.strip().str.lower() != voter_name.lower()]
 
         if not top_pool.empty:
-            st.markdown("### 🍿 Tonight's picks")
-            st.caption("Top-rated, community-recommended picks (stable for today).")
-            sample_size = min(3, len(top_pool))
-            # FIX #5 / M2: deterministic by entry_id + date, independent of row order
-            today_str = datetime.now().strftime("%Y%m%d")
-            # CR#4: .head(sample_size) guards against >sample_size rows when two
-            # entries share a normalized entry_id (isin can match extras) — without
-            # it, pcols[i] overflows the columns list and crashes the Browse page.
-            picks = _stable_daily_picks(top_pool, today_str, sample_size).head(sample_size)
-            pcols = st.columns(sample_size)
-            for i, (_, pr) in enumerate(picks.iterrows()):
-                with pcols[i]:
-                    poster = pr.get("poster_url", "") or ""
-                    if poster:
-                        st.image(poster, width=70)
-                    st.markdown(
-                        f"**{html.escape(str(pr.get('title','–')))}**  \n"
-                        f"{platform_badge(pr.get('platform',''))} &nbsp; "
-                        f"{rating_stars(pr.get('rating'))}",
-                        unsafe_allow_html=True,
-                    )
-                    pick_eid = _normalize_entry_id(pr.get("entry_id", ""))
-                    if st.button("View Details", key=f"tonight_view_{pick_eid}_{i}", use_container_width=True):
-                        st.session_state["selected_entry_id"] = pick_eid
-                        st.session_state["selected_entry_title"] = str(pr.get("title", "") or "").strip()
-                        st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
-                        st.rerun()
-            st.divider()
+            # Collapsed by default so the movie list is visible without scrolling;
+            # users can expand to see the daily picks.
+            with st.expander("🍿 Tonight's picks — top-rated community recommendations", expanded=False):
+                sample_size = min(3, len(top_pool))
+                # FIX #5 / M2: deterministic by entry_id + date, independent of row order
+                today_str = datetime.now().strftime("%Y%m%d")
+                # CR#4: .head(sample_size) guards against >sample_size rows when two
+                # entries share a normalized entry_id (isin can match extras) — without
+                # it, pcols[i] overflows the columns list and crashes the Browse page.
+                picks = _stable_daily_picks(top_pool, today_str, sample_size).head(sample_size)
+                pcols = st.columns(sample_size)
+                for i, (_, pr) in enumerate(picks.iterrows()):
+                    with pcols[i]:
+                        poster = pr.get("poster_url", "") or ""
+                        if poster:
+                            st.image(poster, width=70)
+                        st.markdown(
+                            f"**{html.escape(str(pr.get('title','–')))}**  \n"
+                            f"{platform_badge(pr.get('platform',''))} &nbsp; "
+                            f"{rating_stars(pr.get('rating'))}",
+                            unsafe_allow_html=True,
+                        )
+                        pick_eid = _normalize_entry_id(pr.get("entry_id", ""))
+                        if st.button("View Details", key=f"tonight_view_{pick_eid}_{i}", use_container_width=True):
+                            st.session_state["selected_entry_id"] = pick_eid
+                            st.session_state["selected_entry_title"] = str(pr.get("title", "") or "").strip()
+                            st.session_state["selected_entry_type"] = str(pr.get("type", "") or "").strip()
+                            st.rerun()
     # ── Quick-filter chip bar (always visible) ─────────────────────
     st.markdown("""
     <style>
@@ -1955,13 +2015,11 @@ def page_browse(entries_ws, votes_ws, sel_year=None, sel_month=None):
 
     # ── Inline filter row: type segmented control + preset chips + Mine ──
     # (moctale-style: All / Movies / Series sits inline with the filters)
-    st.markdown('<div class="typebar">', unsafe_allow_html=True)
     _TYPE_CHOICES = ["All", "Movies", "Series"]
     type_choice = st.segmented_control(
         "Type", _TYPE_CHOICES, default="All",
         key="browse_type_seg", label_visibility="collapsed",
     ) or "All"
-    st.markdown('</div>', unsafe_allow_html=True)
 
     _preset_chips = ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"]
     _current_preset = st.session_state.get("browse_preset", "All")
