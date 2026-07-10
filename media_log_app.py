@@ -232,7 +232,12 @@ COLUMNS = [
     "entry_id", "timestamp", "added_by", "title", "type", "genre",
     "platform", "status", "rating", "recommend",
     "watched_year", "language", "comments", "poster_url", "watched_with", "tmdb_id",
+    "release_date",
 ]
+
+# Month names for the sidebar Year/Month release filter (index 1..12).
+MONTH_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 DETAIL_VIEW_KEYS = ["selected_entry_id", "selected_entry_title", "selected_entry_type"]
 
@@ -919,7 +924,9 @@ def get_sheets_safe():
 
 
 def empty_df():
-      return pd.DataFrame(columns=COLUMNS)
+      # Include the derived release-date helper columns so Browse filtering
+      # works even when the sheet is empty.
+      return pd.DataFrame(columns=COLUMNS + ["_rel_year", "_rel_month"])
 
 
 def empty_votes_df():
@@ -953,6 +960,15 @@ def read_entries(_ws) -> pd.DataFrame:
           df["platform"] = df["platform"].str.strip().apply(_normalize_platform_name)
     if "language" in df.columns:
           df["language"] = df["language"].str.strip()
+    # release_date stays a raw string (keeps the Sheets write/snapshot path
+    # simple); derive numeric year/month helper columns for the sidebar filter.
+    if "release_date" in df.columns:
+        _rel = pd.to_datetime(df["release_date"], errors="coerce")
+        df["_rel_year"] = _rel.dt.year.astype("Int64")
+        df["_rel_month"] = _rel.dt.month.astype("Int64")
+    else:
+        df["_rel_year"] = pd.array([pd.NA] * len(df), dtype="Int64")
+        df["_rel_month"] = pd.array([pd.NA] * len(df), dtype="Int64")
     return df
 
 
@@ -1245,22 +1261,69 @@ def ensure_username() -> bool:
         # Username not ready yet → tell caller to stop
         return False
 
-    # 3) We DO have a name: show it and allow changing it
-    display_name = st.session_state["username"].strip()
-    st.sidebar.markdown(f"👤 **{html.escape(display_name)}**")
-
-    if st.sidebar.button("Change name", key="change_name_btn"):
-        st.session_state["username"] = ""
-        st.session_state["voter_name"] = ""
-        st.rerun()
-
+    # 3) We DO have a name. The sidebar chrome (name + Change name) is rendered
+    #    by render_sidebar() so it sits below the logo/Home — nothing to draw here.
     return True
+
+TOP_NAV_CSS = """
+<style>
+/* Top navigation tabs (segmented control) — sit like a tab bar under the title */
+.topnav-wrap { margin: 2px 0 10px 0; }
+.topnav-wrap [data-testid="stSegmentedControl"] button {
+    font-size: 0.98rem !important;
+    font-weight: 700 !important;
+    padding: 8px 22px !important;
+}
+/* Inline "type" segmented control in the Browse filter row */
+.typebar [data-testid="stSegmentedControl"] button {
+    padding: 6px 16px !important;
+    font-weight: 600 !important;
+}
+</style>
+"""
+
+
+def render_top_nav():
+    """Render the Browse / Add Entry / Reports navigation as top-of-page tabs.
+    Returns the selected page string. Honours forced navigation from dialogs."""
+    st.markdown(TOP_NAV_CSS, unsafe_allow_html=True)
+
+    _nav_pages = ["Browse", "Add Entry", "Reports"]
+    _nav_icons = {"Browse": "🎬 Browse", "Add Entry": "＋ Add Entry", "Reports": "📊 Reports"}
+
+    # Forced navigation (e.g. after a save) — write the widget key BEFORE render.
+    _forced = st.session_state.pop("_force_nav", None)
+    if _forced in _nav_pages:
+        st.session_state["_nav_tabs"] = _nav_icons[_forced]
+
+    st.markdown('<div class="topnav-wrap">', unsafe_allow_html=True)
+    _label = st.segmented_control(
+        "Navigate",
+        options=[_nav_icons[p] for p in _nav_pages],
+        default=_nav_icons["Browse"],
+        key="_nav_tabs",
+        label_visibility="collapsed",
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Map the icon label back to the plain page name (segmented_control can
+    # return None if somehow deselected — fall back to Browse).
+    page = next((p for p in _nav_pages if _nav_icons[p] == _label), "Browse")
+
+    # Remember last page to clear detail view when changing pages
+    prev_page = st.session_state.get("prev_page")
+    if prev_page is not None and prev_page != page:
+        _clear_detail_view_state()
+    st.session_state["prev_page"] = page
+    return page
+
 
   # ─────────────────────────────────────────────
   #  SIDEBAR
   # ─────────────────────────────────────────────
-def render_sidebar():
-    """Render sidebar navigation. Returns (page, current_name)."""
+def render_sidebar(entries_df=None):
+    """Render sidebar chrome + the Year/Month release filter.
+    Returns (current_name, sel_year, sel_month)."""
 
     # Logo / title
     st.sidebar.markdown(
@@ -1279,41 +1342,67 @@ def render_sidebar():
             st.session_state.pop(k, None)
         st.rerun()
 
-    # Navigation radio — honour forced navigation from dialogs.
-    # We must write directly into the widget's session_state key BEFORE
-    # the radio renders; the `index` param is ignored after first render.
-    _nav_pages = ["Browse", "Add Entry", "Reports"]
-    _forced = st.session_state.pop("_force_nav", None)
-    if _forced in _nav_pages:
-        st.session_state["_nav_radio"] = _forced
-    page = st.sidebar.radio(
-        "Navigate",
-        _nav_pages,
-        key="_nav_radio",
-    )
-
-    # Remember last page to clear detail view when changing pages
-    prev_page = st.session_state.get("prev_page")
-    if prev_page is not None and prev_page != page:
-        _clear_detail_view_state()
-    st.session_state["prev_page"] = page
-
-    st.sidebar.divider()
-
-    # Show current username (ensure_username() already handled setting it)
+    # Current username + change-name control (single source; ensure_username()
+    # sets the value, the sidebar renders it here).
     current_name = st.session_state.get("username", "").strip()
     if current_name:
         st.sidebar.markdown(f"👤 **{html.escape(current_name)}**")
+    if st.sidebar.button("Change name", key="change_name_btn", use_container_width=True):
+        st.session_state["username"] = ""
+        st.session_state["voter_name"] = ""
+        st.rerun()
 
-    # Page descriptions for accessibility / new-user orientation
-    _page_hints = {
-        "Browse":    "Browse, search and filter all logged entries.",
-        "Add Entry": "Log a new movie or web series.",
-        "Reports":   "View stats, charts and activity summaries.",
-    }
-    st.sidebar.caption(_page_hints.get(page, ""))
+    # ── Year / Month release filter (moctale-style) ────────────────
+    sel_year, sel_month = _render_year_month_filter(entries_df)
 
-    return page, current_name
+    return current_name, sel_year, sel_month
+
+
+def _render_year_month_filter(entries_df):
+    """Sidebar Year + Month pills that filter Browse by TMDB release_date.
+    Year-only selection returns the whole year; a month narrows within it.
+    Returns (sel_year:int|None, sel_month:int|None)."""
+    st.sidebar.divider()
+    st.sidebar.markdown("**Release date**")
+
+    # Available years come from the data (release_date backfilled from TMDB).
+    years = []
+    if entries_df is not None and "_rel_year" in entries_df.columns:
+        years = sorted(
+            {int(y) for y in entries_df["_rel_year"].dropna().tolist()},
+            reverse=True,
+        )
+    if not years:
+        st.sidebar.caption("No release dates available yet.")
+        return None, None
+
+    st.sidebar.caption("Year")
+    sel_year = st.sidebar.pills(
+        "Year", years, selection_mode="single",
+        format_func=str, key="rel_year_pills", label_visibility="collapsed",
+    )
+
+    sel_month = None
+    if sel_year is not None:
+        st.sidebar.caption("Month")
+        # Only offer months that actually have entries for the chosen year.
+        months_present = sorted({
+            int(m) for m in entries_df.loc[
+                entries_df["_rel_year"] == sel_year, "_rel_month"
+            ].dropna().tolist()
+        })
+        if months_present:
+            sel_month = st.sidebar.pills(
+                "Month", months_present, selection_mode="single",
+                format_func=lambda m: MONTH_ABBR[m], key="rel_month_pills",
+                label_visibility="collapsed",
+            )
+        if st.sidebar.button("Clear year/month", key="clear_rel_filter", use_container_width=True):
+            st.session_state.pop("rel_year_pills", None)
+            st.session_state.pop("rel_month_pills", None)
+            st.rerun()
+
+    return sel_year, sel_month
 
 
 # ─────────────────────────────────────────────
@@ -1419,6 +1508,9 @@ def page_add_entry(entries_ws, current_name: str):
                         )
                     st.session_state["pf_platform"] = _platform_from_tmdb_networks(details.get("networks", []))
                     st.session_state["pf_language"] = _language_from_tmdb_code(details.get("language", ""))
+                    # Capture TMDB release date so the sheet's release_date column
+                    # is populated for the Year/Month filter without a later lookup.
+                    st.session_state["pf_release_date"] = details.get("release_date", "") or ""
                     st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
                     st.session_state["_add_step"] = 2
                     st.session_state.pop("tmdb_results", None)
@@ -1588,13 +1680,14 @@ def page_add_entry(entries_ws, current_name: str):
                     "poster_url": poster_url,
                     "watched_with": watched_with.strip() if watched_with else "",
                     "tmdb_id": st.session_state.get("pf_tmdb_id", ""),
+                    "release_date": st.session_state.get("pf_release_date", ""),
                 }
                 try:
                     append_row(entries_ws, row)
                     read_entries.clear()
                     st.session_state["_entries_dirty"] = True
                     # Clear TMDB prefill state
-                    for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language", "pf_tmdb_id"):
+                    for k in ("pf_title", "pf_year", "pf_genres", "pf_type", "pf_poster", "pf_platform", "pf_language", "pf_tmdb_id", "pf_release_date"):
                         st.session_state.pop(k, None)
                     st.session_state.pop(dup_key, None)
                     st.session_state["_add_form_reset"] = st.session_state.get("_add_form_reset", 0) + 1
@@ -1730,7 +1823,7 @@ def _stable_daily_picks(pool_df: pd.DataFrame, date_str: str, n: int) -> pd.Data
     chosen = set(ranked[:n])
     return pool_df[ids.isin(chosen)]
 
-def page_browse(entries_ws, votes_ws):
+def page_browse(entries_ws, votes_ws, sel_year=None, sel_month=None):
     st.markdown("""
     <style>
     .browse-toolbar div[data-testid="stHorizontalBlock"] {align-items:end; gap:0.5rem;}
@@ -1860,6 +1953,16 @@ def page_browse(entries_ws, votes_ws):
     </style>
     """, unsafe_allow_html=True)
 
+    # ── Inline filter row: type segmented control + preset chips + Mine ──
+    # (moctale-style: All / Movies / Series sits inline with the filters)
+    st.markdown('<div class="typebar">', unsafe_allow_html=True)
+    _TYPE_CHOICES = ["All", "Movies", "Series"]
+    type_choice = st.segmented_control(
+        "Type", _TYPE_CHOICES, default="All",
+        key="browse_type_seg", label_visibility="collapsed",
+    ) or "All"
+    st.markdown('</div>', unsafe_allow_html=True)
+
     _preset_chips = ["All", "Recommended only", "High ratings (≥ 8)", "Plan to Watch"]
     _current_preset = st.session_state.get("browse_preset", "All")
 
@@ -1911,6 +2014,20 @@ def page_browse(entries_ws, votes_ws):
 
       # ── Apply filters ──────────────────────────────────────────────
     filtered = df.copy()
+
+    # Year / Month release filter (from the sidebar). Year-only keeps the whole
+    # year; a month narrows within it. Rows without a release_date are excluded
+    # when a year is selected (they have no year to match).
+    if sel_year is not None and "_rel_year" in filtered.columns:
+        filtered = filtered[filtered["_rel_year"] == sel_year]
+        if sel_month is not None and "_rel_month" in filtered.columns:
+            filtered = filtered[filtered["_rel_month"] == sel_month]
+
+    # Inline type segmented control (All / Movies / Series). Applied here so the
+    # "Showing X of Y" count reflects the choice.
+    if type_choice != "All" and "type" in filtered.columns:
+        _want = "webseries" if type_choice == "Series" else "movie"
+        filtered = filtered[filtered["type"].str.strip().str.lower() == _want]
 
     if preset == "Recommended only":
         filtered = filtered[filtered.get("recommend", pd.Series(dtype=str)).str.lower() == "yes"]
@@ -1974,7 +2091,7 @@ def page_browse(entries_ws, votes_ws):
         filtered = filtered.sort_values(sort_col, ascending=sort_asc, na_position="last")
 
       # FIX #4: Detect filter changes and reset pagination
-    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{lang_f}|{sort_choice}"
+    current_filter_sig = f"{preset}|{show_mine}|{search_text}|{plat_f}|{type_f}|{stat_f}|{rec_f}|{genre_f}|{lang_f}|{sort_choice}|{type_choice}|{sel_year}|{sel_month}"
     if st.session_state.get("_last_filter_sig") != current_filter_sig:
         st.session_state["_last_filter_sig"] = current_filter_sig
         for k in list(st.session_state.keys()):
@@ -2035,22 +2152,15 @@ def page_browse(entries_ws, votes_ws):
         else:
             _render_table(page_data, v_summary)
 
-    movies_df = filtered[filtered["type"].str.strip().str.lower() == "movie"] if "type" in filtered.columns else filtered.iloc[0:0]
-    series_df = filtered[filtered["type"].str.strip().str.lower() == "webseries"] if "type" in filtered.columns else filtered.iloc[0:0]
-
-    tab_all, tab_movies, tab_series = st.tabs(["🎬 All", "🎥 Movies", "📺 Web Series"])
-    with tab_all:
-          _paginate_render(filtered, "all", "Cards", vote_summary, votes_df, votes_ws)
-    with tab_movies:
-          if movies_df.empty:
-              st.info("No movies match the current filters.")
-          else:
-              _paginate_render(movies_df, "movies", "Cards", vote_summary, votes_df, votes_ws)
-    with tab_series:
-          if series_df.empty:
-              st.info("No web series match the current filters.")
-          else:
-              _paginate_render(series_df, "series", "Cards", vote_summary, votes_df, votes_ws)
+    # `filtered` is already narrowed by the inline type segmented control, so a
+    # single scoped render replaces the old All/Movies/Web Series tabs. The
+    # scope key varies by type so pagination state doesn't bleed between views.
+    _scope = {"Movies": "movies", "Series": "series"}.get(type_choice, "all")
+    if filtered.empty and type_choice != "All":
+        _noun = "movies" if type_choice == "Movies" else "web series"
+        st.info(f"No {_noun} match the current filters.")
+    else:
+        _paginate_render(filtered, _scope, "Cards", vote_summary, votes_df, votes_ws)
 
 
   # ─────────────────────────────────────────────
@@ -2671,6 +2781,11 @@ def main():
         layout="wide",
     )
 
+    # 1b) Global design tokens + responsive rules (define the --surface/--accent
+    #     CSS variables and fonts the rest of the app's inline styles depend on).
+    st.markdown(GLOBAL_TOKENS_CSS, unsafe_allow_html=True)
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+
     # 2) Welcome / username gate
     ready = ensure_username()
     if not ready:
@@ -2685,17 +2800,22 @@ def main():
         return
     votes_ws = votes_ws_or_error
 
-    # 4) Sidebar and navigation
-    page, current_name = render_sidebar()
+    # 4) Top-tab navigation (Browse / Add Entry / Reports)
+    page = render_top_nav()
+
+    # 5) Sidebar chrome + Year/Month release filter (needs the entries df so
+    #    the year list reflects real data). Cheap: read_entries is cached.
+    _entries_for_filter = read_entries(entries_ws)
+    current_name, sel_year, sel_month = render_sidebar(_entries_for_filter)
     render_back_to_top_button()
 
-    # 5) Route to selected page
+    # 6) Route to selected page
     if page == "Add Entry":
         page_add_entry(entries_ws, current_name)
     elif page == "Reports":
         page_reports(entries_ws)
     else:  # "Browse"
-        page_browse(entries_ws, votes_ws)
+        page_browse(entries_ws, votes_ws, sel_year, sel_month)
 
 if __name__ == "__main__":
       main()
