@@ -672,8 +672,10 @@ def render_entry_detail(entry_row, vote_summary, entries_ws=None):
                               _upd["status"] = "watched"
                               update_row(entries_ws, _ridx, _upd)
                               read_entries.clear()
-                      except Exception:
-                          pass
+                      except Exception as e:
+                          # Don't fail silently — the write can still fail (network,
+                          # permissions); tell the user rather than pretend it saved.
+                          st.toast(f"Couldn't sync 'Watched' to the sheet: {e}", icon="⚠️")
               st.rerun()
 
           _col_btn_label = "✓ In Collection" if _col_in else "＋ Add to Collection"
@@ -1005,28 +1007,74 @@ def cast_vote(votes_ws, entry_id: int, voter_name: str, vote: str):
       )
 
 
+def _sheet_cell(value):
+    """Coerce a single value into something the Google Sheets API can JSON-
+    serialize. read_entries() normalizes columns (timestamp → pd.Timestamp,
+    rating → float), and pd.Timestamp is NOT JSON-serializable — writing such
+    a row back verbatim raised 'Object of type Timestamp is not JSON
+    serializable', breaking every edit and 'Mark as watched' write (CR#1)."""
+    if value is None:
+        return ""
+    # pandas NaN / NaT → empty cell (pd.isna on a scalar is safe)
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, pd.Timestamp):
+        # Match the "T"-separated isoformat originally written on create
+        return value.isoformat(timespec="seconds")
+    if isinstance(value, float) and value.is_integer():
+        # rating 8.0 → "8" so the sheet keeps clean integer-looking values
+        return int(value)
+    return value
+
+def _row_values_for_sheet(row_dict: dict) -> list:
+    """Build the ordered, Sheets-safe cell list for a COLUMNS row."""
+    return [_sheet_cell(row_dict.get(c, "")) for c in COLUMNS]
+
 def append_row(ws, row_dict: dict):
       ws.append_row(
-          [row_dict.get(c, "") for c in COLUMNS],
+          _row_values_for_sheet(row_dict),
           value_input_option="USER_ENTERED",
       )
 
 def _row_snapshot_changed(entries_ws, row_idx, original_row) -> bool:
     """Re-read the live row and compare against the snapshot the edit form
-    was built from. Returns True if anything changed since page load (C2)."""
+    was built from. Returns True if anything changed since page load (C2).
+
+    Both sides are pushed through _sheet_cell so a normalized snapshot
+    (pd.Timestamp / float from read_entries) compares equal to the raw string
+    the live sheet returns — otherwise this always reported a false conflict
+    ('2026-07-10 12:00:00' vs '2026-07-10T12:00:00', '8.0' vs '8') and blocked
+    every legitimate edit (CR#2)."""
     try:
         live_values = entries_ws.row_values(row_idx)
         live = dict(zip(COLUMNS, live_values + [""] * (len(COLUMNS) - len(live_values))))
     except Exception:
         return False  # can't verify — fail open, let the save proceed rather than block on a transient read error
     for c in COLUMNS:
-        if str(live.get(c, "")).strip() != str(original_row.get(c, "")).strip():
+        if c == "timestamp":
+            # Sheets stores the datetime and echoes it back space-separated
+            # ('2026-07-09 11:03:06') while the normalized snapshot is a
+            # pd.Timestamp rendered "T"-separated. Compare as parsed datetimes
+            # so formatting differences don't register as an edit conflict.
+            live_ts = pd.to_datetime(live.get(c, ""), errors="coerce")
+            snap_ts = pd.to_datetime(original_row.get(c, ""), errors="coerce")
+            if pd.isna(live_ts) and pd.isna(snap_ts):
+                continue
+            if live_ts != snap_ts:
+                return True
+            continue
+        live_norm = str(_sheet_cell(live.get(c, ""))).strip()
+        snap_norm = str(_sheet_cell(original_row.get(c, ""))).strip()
+        if live_norm != snap_norm:
             return True
     return False
 
 def update_row(ws, row_index: int, row_dict: dict):
       """Update an existing row in the sheet (1-indexed, header is row 1)."""
-      values = [row_dict.get(c, "") for c in COLUMNS]
+      values = _row_values_for_sheet(row_dict)
       ws.update(f"A{row_index}:{chr(64+len(COLUMNS))}{row_index}", [values],
                 value_input_option="USER_ENTERED")
 
@@ -1060,6 +1108,95 @@ def find_row_index(ws, entry_id) -> int:
         raise RowLookupError(f"Could not verify row for entry_id {entry_id}: {e}")
     return cell.row if cell else None
 
+LANDING_CSS = """
+<style>
+/* ── Moctale-style welcome landing ────────────────────────────── */
+/* Hide the sidebar entirely while the name gate is showing */
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+[data-testid="stHeader"] { background: transparent !important; }
+
+/* Near-black cinematic backdrop with a subtle purple glow */
+[data-testid="stAppViewContainer"], .stApp {
+    background:
+        radial-gradient(1100px 520px at 50% -8%, rgba(124,58,237,0.22) 0%, rgba(124,58,237,0) 60%),
+        radial-gradient(900px 500px at 85% 110%, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0) 55%),
+        #080808 !important;
+}
+/* Pull the block container to vertical centre */
+.stApp [data-testid="stMainBlockContainer"],
+.stApp .block-container {
+    max-width: 720px;
+    padding-top: 12vh;
+    padding-bottom: 6vh;
+}
+.landing-wrap { text-align: center; }
+.landing-badge {
+    display: inline-block;
+    font-size: 0.78rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: #a78bfa;
+    border: 1px solid rgba(167,139,250,0.32);
+    background: rgba(124,58,237,0.10);
+    padding: 6px 16px;
+    border-radius: 999px;
+    margin-bottom: 26px;
+}
+.landing-title {
+    font-family: 'Cabinet Grotesk', 'Inter', sans-serif;
+    font-size: clamp(2.8rem, 7vw, 4.6rem);
+    font-weight: 850;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px 0;
+    background: linear-gradient(180deg, #ffffff 0%, #c4b5fd 130%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.landing-tagline {
+    font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+    color: #cbd5e1;
+    font-weight: 400;
+    margin: 0 auto 6px auto;
+    max-width: 34ch;
+    line-height: 1.5;
+}
+.landing-sub {
+    font-size: 0.95rem;
+    color: #6b7789;
+    margin: 0 auto 34px auto;
+    max-width: 40ch;
+}
+/* Style the name input to sit centred and feel like a hero search box */
+.stApp [data-testid="stTextInput"] input {
+    text-align: center;
+    font-size: 1.05rem;
+    padding: 14px 18px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(148,163,184,0.28);
+    color: #f1f5f9;
+}
+.stApp [data-testid="stTextInput"] input:focus {
+    border-color: var(--accent, #7c3aed);
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.25);
+}
+.stApp [data-testid="stTextInput"] label { justify-content: center; width: 100%; }
+.stApp [data-testid="stFormSubmitButton"] button {
+    width: 100%;
+    border-radius: 14px;
+    padding: 12px 0;
+    font-weight: 700;
+    background: #7c3aed;
+    border: none;
+    color: #fff;
+}
+.stApp [data-testid="stFormSubmitButton"] button:hover { background: #6d28d9; }
+</style>
+"""
+
+
 def ensure_username() -> bool:
     """Capture and persist the user's name. Returns True when ready."""
 
@@ -1069,17 +1206,37 @@ def ensure_username() -> bool:
     if "voter_name" not in st.session_state:
         st.session_state["voter_name"] = st.session_state["username"]
 
-    # 2) If we don't have a name yet, show the welcome gate
+    # 2) If we don't have a name yet, show the centered moctale-style landing
     if not st.session_state["username"].strip():
-        st.sidebar.markdown("### Welcome!")
-        name_input = st.sidebar.text_input(
-            "Your name",
-            key="name_entry",
-            placeholder="e.g. Pankaj",
-        )
+        st.markdown(GLOBAL_TOKENS_CSS, unsafe_allow_html=True)
+        st.markdown(LANDING_CSS, unsafe_allow_html=True)
 
-        # User typed something → store it and rerun
-        if name_input.strip():
+        # Centre the hero column
+        _l, mid, _r = st.columns([1, 3, 1])
+        with mid:
+            st.markdown(
+                """
+                <div class="landing-wrap">
+                    <div class="landing-badge">🎬 MediaLog</div>
+                    <h1 class="landing-title">What Am I<br>Watching?</h1>
+                    <p class="landing-tagline">Find tales that matter — logged, rated and recommended by your circle.</p>
+                    <p class="landing-sub">Enter your name to start tracking the movies and series you love.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            with st.form("welcome_gate_form", clear_on_submit=False):
+                name_input = st.text_input(
+                    "Your name",
+                    key="name_entry",
+                    placeholder="e.g. Pankaj",
+                    label_visibility="collapsed",
+                )
+                submitted = st.form_submit_button("Enter MediaLog →", use_container_width=True)
+
+        # User submitted (Enter or button) with a non-empty name → store & rerun
+        if (submitted or name_input.strip()) and name_input.strip():
             cleaned = name_input.strip()
             st.session_state["username"] = cleaned
             st.session_state["voter_name"] = cleaned
@@ -1362,7 +1519,12 @@ def page_add_entry(entries_ws, current_name: str):
         submitted = st.form_submit_button(
             "💾 Save entry", use_container_width=True, type="primary"
         )
-    if submitted:
+    # CR#3: after "Add anyway" the dialog reruns WITHOUT resubmitting the form,
+    # so `submitted` is False and the save block would be skipped — the entry
+    # was never actually added. Proceed if the duplicate was just confirmed for
+    # this title (widgets retain their values across the rerun).
+    _pending_dup_key = f"confirm_duplicate_{title.strip().lower()}"
+    if submitted or st.session_state.get(_pending_dup_key):
         errors = []
         if not added_by.strip():
             errors.append("Your name is required.")
@@ -1404,6 +1566,9 @@ def page_add_entry(entries_ws, current_name: str):
                 st.session_state["username"] = added_by.strip()
                 st.session_state["voter_name"] = added_by.strip()
                 poster_url = st.session_state.pop("pending_poster", "")
+                # Millisecond epoch as a unique-enough entry_id. NOT a UUID —
+                # two adds within the same millisecond would collide; acceptable
+                # for this single-user-at-a-time app.
                 next_id = int(time.time() * 1000)
 
                 row = {
@@ -1655,7 +1820,10 @@ def page_browse(entries_ws, votes_ws):
             sample_size = min(3, len(top_pool))
             # FIX #5 / M2: deterministic by entry_id + date, independent of row order
             today_str = datetime.now().strftime("%Y%m%d")
-            picks = _stable_daily_picks(top_pool, today_str, sample_size)
+            # CR#4: .head(sample_size) guards against >sample_size rows when two
+            # entries share a normalized entry_id (isin can match extras) — without
+            # it, pcols[i] overflows the columns list and crashes the Browse page.
+            picks = _stable_daily_picks(top_pool, today_str, sample_size).head(sample_size)
             pcols = st.columns(sample_size)
             for i, (_, pr) in enumerate(picks.iterrows()):
                 with pcols[i]:
@@ -2468,7 +2636,11 @@ def _render_table(filtered, vote_summary):
       if "recommend" in df_display.columns:
           df_display["recommend"] = df_display["recommend"].apply(recommend_badge)
       if "type" in df_display.columns:
-          df_display["type"] = df_display["type"].str.title()
+          # CR polish: .title() turns "webseries" → "Webseries"; use the
+          # canonical normalizer so it reads "Web Series".
+          df_display["type"] = df_display["type"].apply(
+              lambda t: "Web Series" if normalize_media_type(t) == MEDIA_TYPE_SERIES else "Movie"
+          )
 
       col_order = ["title", "type", "genre", "platform", "rating",
                    "recommend", "community_votes", "status", "language",
