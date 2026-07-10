@@ -14,6 +14,13 @@ GLOBAL_TOKENS_CSS = """<style>
 @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&f[]=general-sans@400,500,600&display=swap');
 html, body, [class*="css"] { font-family: 'General Sans', sans-serif; }
 .detail-title, .stat-value { font-family: 'Cabinet Grotesk', sans-serif; }
+/* Force the dark palette even if a user's browser has a saved LIGHT Streamlit
+   theme preference (that preference otherwise overrides config.toml's base). */
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    background-color: #0b0f17 !important;
+    color: #f1f5f9 !important;
+}
+[data-testid="stSidebar"] { background-color: #0e131c !important; }
 :root {
   /* Surfaces */
 --bg:            #0b0f17;
@@ -1282,13 +1289,26 @@ TOP_NAV_CSS = """
 /* Compact the collapsed "Tonight's picks" expander header */
 .st-key-tonight_expander summary { font-size: 1.02rem !important; font-weight: 700 !important; }
 
+/* Streamlit's fixed top chrome sits at z-index ~999990 and is 60px tall — it
+   would cover a sticky bar pinned to top:0. Make it transparent + non-blocking
+   so our tab bar can pin flush to the very top without being hidden behind it. */
+[data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    pointer-events: none;
+}
+/* keep the built-in toolbar buttons (deploy/menu) clickable */
+[data-testid="stHeader"] [data-testid="stToolbar"],
+[data-testid="stHeader"] [data-testid="stDecoration"] { pointer-events: auto; }
+
 /* ── Sticky top navigation TABS (Browse / Add Entry / Reports) ───── */
 /* Streamlit 1.58 renders st.segmented_control as stButtonGroup; the keyed
-   wrapper .st-key-_nav_tabs is the stable hook. */
+   wrapper .st-key-_nav_tabs is the stable hook. z-index must beat Streamlit's
+   header (~999990) so the tabs are never hidden behind it while scrolling. */
 .st-key-_nav_tabs {
     position: sticky;
     top: 0;
-    z-index: 1000;
+    z-index: 999999;
     background: var(--bg, #0b0f17);
     padding: 10px 0 0 0;
     margin-bottom: 14px;
